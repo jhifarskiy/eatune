@@ -1,76 +1,236 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>EatOne Player</title>
-  <style>
-    body {
-      background-color: #041C3E;
-      color: white;
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 40px;
-    }
-    audio {
-      margin-top: 20px;
-      width: 90%;
-      max-width: 500px;
-    }
-    button {
-      margin-top: 30px;
-      background: white;
-      color: #041C3E;
-      padding: 12px 20px;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-  <h2>EatOne: Now Playing</h2>
-  <div id="status">Ожидание выбора трека...</div>
-  <audio id="player" controls></audio>
-  <button id="unlock">Включить звук</button>
-
-  <script>
-    const audio = document.getElementById('player');
-    const status = document.getElementById('status');
-    const unlock = document.getElementById('unlock');
-    let currentId = null;
-    let unlocked = false;
-
-    unlock.addEventListener('click', () => {
-      audio.play().catch(() => {});
-      unlocked = true;
-      unlock.style.display = 'none';
-    });
-
-    async function poll() {
-      try {
-        const res = await fetch('https://eatune-api.onrender.com/track');
-        const data = await res.json();
-        const id = data.id;
-
-        if (id >= 1 && id <= 5 && id !== currentId) {
-          currentId = id;
-          const url = `https://f004.backblazeb2.com/file/Eatune/${id}.mp3`;
-          audio.src = url;
-          if (unlocked) {
-            audio.play().catch(() => {});
-          }
-          status.textContent = `Играет трек №${id}`;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eatune Player</title>
+    <!-- Подключаем Tailwind CSS для стилей -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Подключаем иконки Heroicons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/heroicons/2.1.3/24/solid/hero-icons.min.css">
+    <!-- Подключаем шрифты с Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Применяем кастомный шрифт и плавные переходы */
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.5s ease;
         }
-      } catch (e) {
-        status.textContent = 'Ошибка получения трека';
-      }
-    }
+        /* Стили для кастомного прогресс-бара */
+        .progress-bar-container {
+            background-color: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+        }
+        .progress-bar {
+            background-color: #1DB954; /* Яркий зеленый, как в Spotify */
+            transition: width 0.1s linear;
+        }
+        /* Анимация появления обложки */
+        .cover-art {
+            animation: fadeIn 0.7s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
 
-    setInterval(poll, 1000);
-    poll();
-  </script>
+    <!-- Основной контейнер плеера -->
+    <div id="player-container" class="w-full max-w-md p-6 sm:p-8 bg-gray-800 rounded-2xl shadow-2xl space-y-6 hidden">
+        
+        <!-- Обложка альбома -->
+        <div class="aspect-square w-full rounded-lg shadow-lg overflow-hidden">
+            <img id="coverArt" src="https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune" alt="Обложка альбома" class="w-full h-full object-cover">
+        </div>
+
+        <!-- Информация о треке -->
+        <div class="text-center space-y-2">
+            <h1 id="trackTitle" class="text-2xl font-bold truncate">Ожидание трека...</h1>
+            <p id="trackArtist" class="text-md text-gray-400">Выберите песню в приложении</p>
+        </div>
+
+        <!-- Аудио элемент (скрыт, но используется для проигрывания) -->
+        <audio id="audioPlayer"></audio>
+
+        <!-- Кастомные элементы управления -->
+        <div class="space-y-3">
+            <!-- Прогресс-бар и время -->
+            <div class="w-full">
+                <div id="progressBarContainer" class="progress-bar-container h-2 rounded-full w-full">
+                    <div id="progressBar" class="progress-bar h-2 rounded-full" style="width: 0%;"></div>
+                </div>
+                <div class="flex justify-between text-xs text-gray-400 mt-1">
+                    <span id="currentTime">0:00</span>
+                    <span id="totalDuration">0:00</span>
+                </div>
+            </div>
+            <!-- Кнопка Play/Pause -->
+            <div class="flex justify-center">
+                 <button id="playPauseBtn" class="bg-green-500 hover:bg-green-600 text-white w-16 h-16 rounded-full flex items-center justify-center transition shadow-lg">
+                    <!-- Иконка Play -->
+                    <svg id="playIcon" class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 0 0 4 4.11V15.89a1.5 1.5 0 0 0 2.3 1.269l9.344-5.89a1.5 1.5 0 0 0 0-2.538L6.3 2.841Z"></path></svg>
+                    <!-- Иконка Pause -->
+                    <svg id="pauseIcon" class="w-8 h-8 hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M5.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75A.75.75 0 0 0 7.25 3h-1.5ZM12.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75a.75.75 0 0 0-.75-.75h-1.5Z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Кнопка для активации звука (необходима из-за политики браузеров) -->
+    <button id="unlockAudioBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-full text-lg shadow-lg transition transform hover:scale-105">
+        Активировать плеер
+    </button>
+    
+    <script>
+        // Получаем все необходимые элементы из DOM
+        const audioPlayer = document.getElementById('audioPlayer');
+        const coverArt = document.getElementById('coverArt');
+        const trackTitle = document.getElementById('trackTitle');
+        const trackArtist = document.getElementById('trackArtist');
+        const playerContainer = document.getElementById('player-container');
+        const unlockAudioBtn = document.getElementById('unlockAudioBtn');
+        
+        // Элементы управления
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const playIcon = document.getElementById('playIcon');
+        const pauseIcon = document.getElementById('pauseIcon');
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBar = document.getElementById('progressBar');
+        const currentTimeEl = document.getElementById('currentTime');
+        const totalDurationEl = document.getElementById('totalDuration');
+
+        let currentTrackId = null;
+        let isAudioUnlocked = false;
+
+        // --- Обработчики событий ---
+
+        // Клик по кнопке активации плеера
+        unlockAudioBtn.addEventListener('click', () => {
+            audioPlayer.muted = false; // Включаем звук
+            audioPlayer.play().then(() => {
+                // Если удалось начать проигрывание (даже тишины), значит, аудио разблокировано
+                isAudioUnlocked = true;
+                unlockAudioBtn.classList.add('hidden'); // Прячем кнопку
+                playerContainer.classList.remove('hidden'); // Показываем плеер
+                pollForTrack(); // Начинаем опрос сервера
+            }).catch(error => {
+                console.error("Audio unlock failed:", error);
+                // Можно показать пользователю сообщение об ошибке
+            });
+        });
+
+        // Клик по кнопке Play/Pause
+        playPauseBtn.addEventListener('click', () => {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+            } else {
+                audioPlayer.pause();
+            }
+        });
+
+        // События плеера для обновления иконки
+        audioPlayer.onplay = () => {
+            playIcon.classList.add('hidden');
+            pauseIcon.classList.remove('hidden');
+        };
+        audioPlayer.onpause = () => {
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+        };
+
+        // Обновление прогресс-бара и времени
+        audioPlayer.addEventListener('timeupdate', () => {
+            const { currentTime, duration } = audioPlayer;
+            if (duration) {
+                const progressPercent = (currentTime / duration) * 100;
+                progressBar.style.width = `${progressPercent}%`;
+                currentTimeEl.textContent = formatTime(currentTime);
+                totalDurationEl.textContent = formatTime(duration);
+            }
+        });
+        
+        // Перемотка трека по клику на прогресс-бар
+        progressBarContainer.addEventListener('click', (e) => {
+            const width = progressBarContainer.clientWidth;
+            const clickX = e.offsetX;
+            const duration = audioPlayer.duration;
+            if(duration) {
+                audioPlayer.currentTime = (clickX / width) * duration;
+            }
+        });
+
+        // --- Основная логика ---
+
+        // Функция для опроса сервера
+        async function pollForTrack() {
+            try {
+                // Запрос на получение информации о текущем треке
+                const response = await fetch('/track'); // Используем относительный путь, т.к. мы на том же домене
+                if (!response.ok) {
+                    throw new Error(`Server responded with ${response.status}`);
+                }
+                const data = await response.json();
+
+                // Проверяем, есть ли трек и изменился ли он
+                if (data && data.id && data.id !== currentTrackId) {
+                    console.log('New track received:', data.title);
+                    currentTrackId = data.id;
+                    updatePlayerUI(data);
+                } else if (!data && currentTrackId) {
+                    // Если треков больше нет, сбрасываем состояние
+                    currentTrackId = null;
+                    resetPlayerUI();
+                }
+            } catch (error) {
+                console.error('Error polling for track:', error);
+                trackTitle.textContent = 'Ошибка связи с сервером';
+                trackArtist.textContent = 'Проверьте консоль';
+            }
+        }
+        
+        // Функция обновления интерфейса плеера
+        function updatePlayerUI(track) {
+            coverArt.classList.remove('cover-art'); // Убираем класс для перезапуска анимации
+            void coverArt.offsetWidth; // трюк для перезапуска анимации
+            coverArt.classList.add('cover-art');
+
+            trackTitle.textContent = track.title || 'Без названия';
+            trackArtist.textContent = track.artist || 'Неизвестный исполнитель';
+            // Используем картинку-заглушку, если обложки нет
+            coverArt.src = track.coverUrl || `https://placehold.co/400x400/1F2937/FFFFFF?text=${track.title.charAt(0)}`;
+            audioPlayer.src = track.trackUrl;
+            
+            if (isAudioUnlocked) {
+                audioPlayer.play().catch(e => console.error("Autoplay failed:", e));
+            }
+        }
+        
+        // Функция сброса интерфейса
+        function resetPlayerUI() {
+            trackTitle.textContent = 'Ожидание трека...';
+            trackArtist.textContent = 'Выберите песню в приложении';
+            coverArt.src = 'https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune';
+            audioPlayer.pause();
+            audioPlayer.src = '';
+            progressBar.style.width = '0%';
+            currentTimeEl.textContent = '0:00';
+            totalDurationEl.textContent = '0:00';
+        }
+
+        // Вспомогательная функция для форматирования времени
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Запускаем опрос сервера каждые 3 секунды
+        setInterval(pollForTrack, 3000);
+
+    </script>
 </body>
 </html>
