@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>EatOne Player</title>
+  <style>
+    body {
+      background-color: #041C3E;
+      color: white;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px;
+    }
+    audio {
+      margin-top: 20px;
+      width: 90%;
+      max-width: 500px;
+    }
+    button {
+      margin-top: 30px;
+      background: white;
+      color: #041C3E;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>EatOne: Now Playing</h2>
+  <div id="status">Ожидание выбора трека...</div>
+  <audio id="player" controls></audio>
+  <button id="unlock">Включить звук</button>
+
+  <script>
+    const audio = document.getElementById('player');
+    const status = document.getElementById('status');
+    const unlock = document.getElementById('unlock');
+    let currentId = null;
+    let unlocked = false;
+
+    unlock.addEventListener('click', () => {
+      audio.play().catch(() => {});
+      unlocked = true;
+      unlock.style.display = 'none';
+    });
+
+    async function poll() {
+      try {
+        const res = await fetch('https://eatune-api.onrender.com/track');
+        const data = await res.json();
+        const id = data.id;
+
+        if (id >= 1 && id <= 5 && id !== currentId) {
+          currentId = id;
+          const url = `https://f004.backblazeb2.com/file/Eatune/${id}.mp3`;
+          audio.src = url;
+          if (unlocked) {
+            audio.play().catch(() => {});
+          }
+          status.textContent = `Играет трек №${id}`;
+        }
+      } catch (e) {
+        status.textContent = 'Ошибка получения трека';
+      }
+    }
+
+    setInterval(poll, 1000);
+    poll();
+  </script>
+</body>
+</html>
