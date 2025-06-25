@@ -1,16 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'api.dart'; // Наш ApiService
+import 'api.dart';
 
 class NowPlayingWidget extends StatefulWidget {
-  // Ключ теперь необязателен, так как мы используем GlobalKey в home_page
   const NowPlayingWidget({super.key});
 
   @override
   State<NowPlayingWidget> createState() => NowPlayingWidgetState();
 }
 
-// Переименовываем, чтобы сделать класс публичным для доступа по ключу
 class NowPlayingWidgetState extends State<NowPlayingWidget> {
   Track? _currentTrack;
   Timer? _pollingTimer;
@@ -35,7 +33,6 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
     super.dispose();
   }
 
-  // Делаем метод публичным, чтобы его можно было вызвать из home_page
   Future<void> fetchCurrentTrack() async {
     try {
       final track = await ApiService.getCurrentTrack();
@@ -104,27 +101,28 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'NOW PLAYING',
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.5,
+        // Заголовок
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Text(
+            'NOW PLAYING',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.5,
+            ),
           ),
         ),
-        const SizedBox(height: 16),
         Row(
           children: [
-            // --- ИЗМЕНЕНО: ОБЛОЖКА СНОВА КВАДРАТНАЯ ---
+            // Обложка
             Container(
-              width: 56,
-              height: 56,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
                 color: const Color(0xFF374151),
-                borderRadius: BorderRadius.circular(
-                  8,
-                ), // Квадрат со скругленными углами
+                borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.15),
@@ -134,7 +132,7 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
                 ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 child: Image.network(
                   _currentTrack?.coverUrl ??
                       'https://placehold.co/100x100/374151/FFFFFF?text=?',
@@ -144,8 +142,8 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
                 ),
               ),
             ),
-            // -----------------------------------------
-            const SizedBox(width: 16),
+            const SizedBox(width: 20),
+            // Название и артист
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -154,18 +152,18 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
                     _currentTrack?.title ?? 'Ничего не играет',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: 20,
                       fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
                     _currentTrack?.artist ?? 'Выберите трек из списка',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.5),
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w400,
                     ),
                     maxLines: 1,
@@ -176,11 +174,11 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Column(
           children: [
             SizedBox(
-              height: 4,
+              height: 3,
               child: LinearProgressIndicator(
                 value: _currentProgress,
                 backgroundColor: Colors.white.withOpacity(0.2),

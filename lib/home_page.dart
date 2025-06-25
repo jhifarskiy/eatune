@@ -98,24 +98,60 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: const Color(0xFF041C3E),
         selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white54,
+        unselectedItemColor: const Color(
+          0xBD1CA4FF,
+        ), // #1CA4FF с 74% прозрачности
         showSelectedLabels: false,
         showUnselectedLabels: false,
         type: BottomNavigationBarType.fixed,
-        items: const [
+        currentIndex: 0, // можно будет сделать управление текущей вкладкой
+        onTap: (index) {
+          // пока без действий
+        },
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
+            icon: SvgPicture.asset(
+              'assets/icons/home.svg',
+              width: 33,
+              height: 33,
+              color: const Color(0xBD1CA4FF),
+            ),
+            activeIcon: SvgPicture.asset(
+              'assets/icons/home.svg',
+              width: 33,
+              height: 33,
+              color: Colors.white,
+            ),
             label: '',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.search_outlined),
-            activeIcon: Icon(Icons.search),
+            icon: SvgPicture.asset(
+              'assets/icons/search.svg',
+              width: 33,
+              height: 33,
+              color: const Color(0xBD1CA4FF),
+            ),
+            activeIcon: SvgPicture.asset(
+              'assets/icons/search.svg',
+              width: 33,
+              height: 33,
+              color: Colors.white,
+            ),
             label: '',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.library_music_outlined),
-            activeIcon: Icon(Icons.library_music),
+            icon: SvgPicture.asset(
+              'assets/icons/playlist.svg',
+              width: 33,
+              height: 33,
+              color: const Color(0xBD1CA4FF),
+            ),
+            activeIcon: SvgPicture.asset(
+              'assets/icons/playlist.svg',
+              width: 33,
+              height: 33,
+              color: Colors.white,
+            ),
             label: '',
           ),
         ],
