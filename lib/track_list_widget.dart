@@ -1,113 +1,143 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'api.dart';
+import 'marquee_widget.dart';
 
 class TrackListWidget extends StatefulWidget {
-  const TrackListWidget({super.key});
+  final Function onTrackSelected;
+  const TrackListWidget({super.key, required this.onTrackSelected});
 
   @override
   State<TrackListWidget> createState() => _TrackListWidgetState();
 }
 
 class _TrackListWidgetState extends State<TrackListWidget> {
-  int? selectedTrackId;
-  final String baseUrl = 'http://192.168.0.102:3000';
+  late Future<List<Track>> futureTracks;
+  String? selectedTrackId;
 
-  final List<Map<String, String>> tracks = List.generate(15, (index) {
-    return {
-      'id': '${index + 1}',
-      'title': 'Track ${index + 1}',
-      'artist': 'Artist ${index + 1}',
-      'duration': '3:${index.toString().padLeft(2, '0')}',
-      'image': 'assets/cover.jpg',
-    };
-  });
+  @override
+  void initState() {
+    super.initState();
+    _loadTracks();
+  }
 
-  Future<void> selectTrack(int id) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/track'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'id': id}),
-    );
-    if (response.statusCode == 200) {
+  void _loadTracks() {
+    futureTracks = ApiService.getAllTracks();
+  }
+
+  void _selectTrack(String id) async {
+    setState(() {
+      selectedTrackId = id;
+    });
+    bool success = await ApiService.selectTrack(id);
+    if (success) {
+      widget.onTrackSelected();
+    } else {
       setState(() {
-        selectedTrackId = id;
+        selectedTrackId = null;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 30),
-      itemCount: tracks.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final track = tracks[index];
-        final isSelected = selectedTrackId == int.parse(track['id']!);
-
-        return GestureDetector(
-          onTap: () => selectTrack(int.parse(track['id']!)),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.white10 : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
+    return FutureBuilder<List<Track>>(
+      future: futureTracks,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(
+            child: Text(
+              snapshot.hasError ? 'Ошибка' : 'Нет треков',
+              style: const TextStyle(color: Colors.white),
             ),
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
+          );
+        }
+        final tracks = snapshot.data!;
+        return RefreshIndicator(
+          onRefresh: () async => _loadTracks(),
+          child: ListView.separated(
+            itemCount: tracks.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final track = tracks[index];
+              final isSelected = selectedTrackId == track.id;
+
+              return InkWell(
+                onTap: () => _selectTrack(track.id),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    image: DecorationImage(
-                      image: AssetImage(track['image']!),
-                      fit: BoxFit.cover,
-                    ),
+                    color: isSelected
+                        ? Colors.white.withOpacity(0.15)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Text(
-                        track['title']!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(8),
+                          image:
+                              track.coverUrl != null &&
+                                  track.coverUrl!.startsWith('http')
+                              ? DecorationImage(
+                                  image: NetworkImage(track.coverUrl!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child:
+                            (track.coverUrl == null ||
+                                !track.coverUrl!.startsWith('http'))
+                            ? const Icon(Icons.music_note, color: Colors.white)
+                            : null,
+                      ),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            MarqueeWidget(
+                              text: track.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            MarqueeWidget(
+                              text: track.artist,
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(width: 10),
                       Text(
-                        track['artist']!,
+                        track.duration,
                         style: const TextStyle(
-                          color: Colors.white70,
+                          color: Colors.white60,
                           fontSize: 14,
                         ),
                       ),
+                      const SizedBox(width: 5),
+                      const Icon(Icons.more_vert, color: Colors.white60),
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      track['duration']!,
-                      style: const TextStyle(
-                        color: Colors.white60,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Icon(Icons.more_vert, color: Colors.white),
-                  ],
-                ),
-              ],
-            ),
+              );
+            },
           ),
         );
       },
