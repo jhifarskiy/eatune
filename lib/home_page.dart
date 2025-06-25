@@ -12,14 +12,11 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Ключ больше не нужен, NowPlayingWidget сам обновляется по таймеру
+  final GlobalKey<_NowPlayingWidgetState> _nowPlayingKey =
+      GlobalKey<_NowPlayingWidgetState>();
 
-  // Эта функция теперь просто существует, чтобы соответствовать контракту виджета,
-  // хотя основное обновление происходит по таймеру в NowPlayingWidget.
-  // Она также полезна для немедленного обновления при желании.
   void _onTrackSelected() {
-    print("Track selection signal received in home_page.");
-    // В будущем здесь можно добавить дополнительную логику, если потребуется.
+    _nowPlayingKey.currentState?.fetchCurrentTrack();
   }
 
   @override
@@ -34,38 +31,52 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         child: SafeArea(
+          bottom: false, // Отключаем отступ снизу у SafeArea
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // --- Верхняя панель по макету ---
                 SizedBox(
-                  height: 80,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  height: 120, // Задаем высоту для позиционирования
+                  child: Stack(
                     children: [
-                      IconButton(
-                        icon: SvgPicture.asset(
-                          'assets/icons/menu.svg',
-                          color: Colors.white,
-                          width: 28,
+                      Positioned(
+                        top: 20,
+                        left: 0,
+                        child: IconButton(
+                          icon: SvgPicture.asset(
+                            'assets/icons/menu.svg',
+                            width: 24,
+                          ),
+                          onPressed: () {},
                         ),
-                        onPressed: () {},
                       ),
-                      SvgPicture.asset('assets/icons/logo.svg', width: 140),
-                      IconButton(
-                        icon: SvgPicture.asset(
-                          'assets/icons/settings.svg',
-                          color: Colors.white,
-                          width: 30,
+                      Align(
+                        alignment: Alignment.center,
+                        child: SvgPicture.asset(
+                          'assets/icons/logo.svg',
+                          width: 150,
                         ),
-                        onPressed: () {},
+                      ),
+                      Positioned(
+                        top: 20,
+                        right: 0,
+                        child: IconButton(
+                          icon: SvgPicture.asset(
+                            'assets/icons/settings.svg',
+                            width: 24,
+                          ),
+                          onPressed: () {},
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                const NowPlayingWidget(),
-                const SizedBox(height: 20),
+                NowPlayingWidget(key: _nowPlayingKey),
+                const SizedBox(height: 30),
                 const TabSelectorWidget(),
                 const SizedBox(height: 20),
 
