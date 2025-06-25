@@ -7,10 +7,10 @@ class NowPlayingWidget extends StatefulWidget {
   const NowPlayingWidget({super.key});
 
   @override
-  State<NowPlayingWidget> createState() => _NowPlayingWidgetState();
+  State<NowPlayingWidget> createState() => NowPlayingWidgetState();
 }
 
-class _NowPlayingWidgetState extends State<NowPlayingWidget> {
+class NowPlayingWidgetState extends State<NowPlayingWidget> {
   Track? _currentTrack;
   Timer? _pollingTimer;
   Timer? _progressTimer;

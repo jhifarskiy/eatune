@@ -12,8 +12,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final GlobalKey<_NowPlayingWidgetState> _nowPlayingKey =
-      GlobalKey<_NowPlayingWidgetState>();
+  final GlobalKey<NowPlayingWidgetState> _nowPlayingKey =
+      GlobalKey<NowPlayingWidgetState>();
 
   void _onTrackSelected() {
     _nowPlayingKey.currentState?.fetchCurrentTrack();
