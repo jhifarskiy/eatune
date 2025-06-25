@@ -1,15 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'api.dart';
+import 'api.dart'; // Наш ApiService
 
 class NowPlayingWidget extends StatefulWidget {
+  // Ключ теперь необязателен, так как мы используем GlobalKey в home_page
   const NowPlayingWidget({super.key});
 
   @override
   State<NowPlayingWidget> createState() => NowPlayingWidgetState();
 }
 
+// Переименовываем, чтобы сделать класс публичным для доступа по ключу
 class NowPlayingWidgetState extends State<NowPlayingWidget> {
   Track? _currentTrack;
   Timer? _pollingTimer;
@@ -22,7 +23,7 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
   void initState() {
     super.initState();
     fetchCurrentTrack();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       fetchCurrentTrack();
     });
   }
@@ -34,10 +35,13 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
     super.dispose();
   }
 
+  // Делаем метод публичным, чтобы его можно было вызвать из home_page
   Future<void> fetchCurrentTrack() async {
     try {
       final track = await ApiService.getCurrentTrack();
-      if (mounted && track?.id != _currentTrack?.id) {
+      if (!mounted) return;
+
+      if (track?.id != _currentTrack?.id) {
         setState(() {
           _currentTrack = track;
           _resetProgress();
@@ -56,14 +60,12 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_currentPosition < _trackDuration) {
-        if (mounted) {
-          setState(() {
-            _currentPosition += const Duration(seconds: 1);
-            _currentProgress = _trackDuration.inSeconds > 0
-                ? _currentPosition.inSeconds / _trackDuration.inSeconds
-                : 0.0;
-          });
-        }
+        setState(() {
+          _currentPosition += const Duration(seconds: 1);
+          _currentProgress = _trackDuration.inSeconds > 0
+              ? _currentPosition.inSeconds / _trackDuration.inSeconds
+              : 0.0;
+        });
       } else {
         timer.cancel();
       }
@@ -72,69 +74,77 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
 
   void _resetProgress() {
     _progressTimer?.cancel();
-    if (mounted) {
-      setState(() {
-        _currentPosition = Duration.zero;
-        _currentProgress = 0.0;
-        _trackDuration = Duration.zero;
-      });
-    }
+    setState(() {
+      _currentPosition = Duration.zero;
+      _currentProgress = 0.0;
+      _trackDuration = Duration.zero;
+    });
   }
 
-  Duration _parseDuration(String d) {
+  Duration _parseDuration(String? d) {
+    if (d == null) return Duration.zero;
     try {
       final parts = d.split(':');
-      return Duration(
-        minutes: int.parse(parts[0]),
-        seconds: int.parse(parts[1]),
-      );
+      final minutes = int.parse(parts[0]);
+      final seconds = int.parse(parts[1]);
+      return Duration(minutes: minutes, seconds: seconds);
     } catch (e) {
       return Duration.zero;
     }
   }
 
   String _formatDuration(Duration d) {
-    return "${d.inMinutes.remainder(60)}:${d.inSeconds.remainder(60).toString().padLeft(2, '0')}";
+    final minutes = d.inMinutes.remainder(60);
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 
   @override
   Widget build(BuildContext context) {
-    // Стиль текста Montserrat Semi-Bold
-    final semiBoldStyle = GoogleFonts.montserrat(fontWeight: FontWeight.w600);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'NOW PLAYING',
-          style: semiBoldStyle.copyWith(
+          style: TextStyle(
             color: Colors.white.withOpacity(0.7),
             fontSize: 12,
+            fontWeight: FontWeight.w600,
             letterSpacing: 1.5,
           ),
         ),
-        const SizedBox(height: 15),
+        const SizedBox(height: 16),
         Row(
           children: [
-            // --- Обложка без рамки и наклона ---
+            // --- ИЗМЕНЕНО: ОБЛОЖКА СНОВА КВАДРАТНАЯ ---
             Container(
-              width: 60,
-              height: 60,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFF334155), // Цвет-заглушка
-                borderRadius: BorderRadius.circular(8),
-                image: _currentTrack?.coverUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(_currentTrack!.coverUrl!),
-                        fit: BoxFit.cover,
-                        onError: (e, s) => print("Failed to load cover: $e"),
-                      )
-                    : null,
+                color: const Color(0xFF374151),
+                borderRadius: BorderRadius.circular(
+                  8,
+                ), // Квадрат со скругленными углами
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: _currentTrack?.coverUrl == null
-                  ? const Icon(Icons.music_note, color: Colors.white54)
-                  : null,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  _currentTrack?.coverUrl ??
+                      'https://placehold.co/100x100/374151/FFFFFF?text=?',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.music_note, color: Colors.grey),
+                ),
+              ),
             ),
+            // -----------------------------------------
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -142,19 +152,23 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
                 children: [
                   Text(
                     _currentTrack?.title ?? 'Ничего не играет',
-                    style: semiBoldStyle.copyWith(
-                      fontSize: 18,
+                    style: const TextStyle(
                       color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
                     ),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 4),
                   Text(
-                    _currentTrack?.artist ?? 'Выберите трек',
-                    style: semiBoldStyle.copyWith(
+                    _currentTrack?.artist ?? 'Выберите трек из списка',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
                       fontSize: 14,
-                      color: Colors.white.withOpacity(0.6),
+                      fontWeight: FontWeight.w400,
                     ),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
@@ -162,76 +176,33 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
-
-        // --- Неинтерактивный прогресс-бар ---
+        const SizedBox(height: 12),
         Column(
           children: [
             SizedBox(
-              height: 12, // Высота контейнера
-              child: Stack(
-                alignment: Alignment.centerLeft,
-                children: [
-                  Container(
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      return Container(
-                        width: (constraints.maxWidth * _currentProgress).clamp(
-                          0,
-                          constraints.maxWidth,
-                        ),
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      );
-                    },
-                  ),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          left: (constraints.maxWidth * _currentProgress).clamp(
-                            0,
-                            constraints.maxWidth - 12,
-                          ),
-                        ),
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
+              height: 4,
+              child: LinearProgressIndicator(
+                value: _currentProgress,
+                backgroundColor: Colors.white.withOpacity(0.2),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   _formatDuration(_currentPosition),
-                  style: semiBoldStyle.copyWith(
-                    color: Colors.white.withOpacity(0.6),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
                     fontSize: 12,
                   ),
                 ),
                 Text(
                   _formatDuration(_trackDuration),
-                  style: semiBoldStyle.copyWith(
-                    color: Colors.white.withOpacity(0.6),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
                     fontSize: 12,
                   ),
                 ),

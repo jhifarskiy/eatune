@@ -13,6 +13,11 @@ class EatOneApp extends StatelessWidget {
     return MaterialApp(
       title: 'EatOne',
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        // ИЗМЕНИТЕ ЭТУ СТРОКУ
+        fontFamily: 'Inter',
+        scaffoldBackgroundColor: const Color(0xFF010A15),
+      ),
       home: const HomePage(),
     );
   }

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
-import 'marquee_widget.dart';
 
 class TrackListWidget extends StatefulWidget {
   final Function onTrackSelected;
+
   const TrackListWidget({super.key, required this.onTrackSelected});
 
   @override
@@ -21,7 +21,9 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   }
 
   void _loadTracks() {
-    futureTracks = ApiService.getAllTracks();
+    setState(() {
+      futureTracks = ApiService.getAllTracks();
+    });
   }
 
   void _selectTrack(String id) async {
@@ -31,10 +33,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     bool success = await ApiService.selectTrack(id);
     if (success) {
       widget.onTrackSelected();
-    } else {
-      setState(() {
-        selectedTrackId = null;
-      });
     }
   }
 
@@ -48,97 +46,101 @@ class _TrackListWidgetState extends State<TrackListWidget> {
             child: CircularProgressIndicator(color: Colors.white),
           );
         }
+
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
           return Center(
             child: Text(
-              snapshot.hasError ? 'Ошибка' : 'Нет треков',
-              style: const TextStyle(color: Colors.white),
+              'Нет доступных треков',
+              style: TextStyle(color: Colors.white.withOpacity(0.5)),
             ),
           );
         }
-        final tracks = snapshot.data!;
-        return RefreshIndicator(
-          onRefresh: () async => _loadTracks(),
-          child: ListView.separated(
-            itemCount: tracks.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final track = tracks[index];
-              final isSelected = selectedTrackId == track.id;
 
-              return InkWell(
-                onTap: () => _selectTrack(track.id),
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Colors.white.withOpacity(0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
+        final tracks = snapshot.data!;
+        return ListView.builder(
+          padding: EdgeInsets.zero, // Убираем отступы по умолчанию
+          itemCount: tracks.length,
+          itemBuilder: (context, index) {
+            final track = tracks[index];
+            final isSelected = selectedTrackId == track.id;
+
+            return InkWell(
+              onTap: () => _selectTrack(track.id),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  children: [
+                    // Обложка
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        track.coverUrl ??
+                            'https://placehold.co/100x100/374151/FFFFFF?text=?',
                         width: 50,
                         height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(8),
-                          image:
-                              track.coverUrl != null &&
-                                  track.coverUrl!.startsWith('http')
-                              ? DecorationImage(
-                                  image: NetworkImage(track.coverUrl!),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: 50,
+                          height: 50,
+                          color: const Color(0xFF374151),
+                          child: const Icon(
+                            Icons.music_note,
+                            color: Colors.grey,
+                            size: 24,
+                          ),
                         ),
-                        child:
-                            (track.coverUrl == null ||
-                                !track.coverUrl!.startsWith('http'))
-                            ? const Icon(Icons.music_note, color: Colors.white)
-                            : null,
                       ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            MarqueeWidget(
-                              text: track.title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Название и артист (ИСПРАВЛЕНО: обернуто в Expanded)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            track.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600, // SemiBold
                             ),
-                            const SizedBox(height: 4),
-                            MarqueeWidget(
-                              text: track.artist,
-                              style: const TextStyle(
-                                color: Colors.white54,
-                                fontSize: 14,
-                              ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            track.artist,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.5),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400, // Regular
                             ),
-                          ],
-                        ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      Text(
-                        track.duration,
-                        style: const TextStyle(
-                          color: Colors.white60,
-                          fontSize: 14,
-                        ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Длительность и иконка (ИСПРАВЛЕНО: без переполнения)
+                    Text(
+                      track.duration,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
                       ),
-                      const SizedBox(width: 5),
-                      const Icon(Icons.more_vert, color: Colors.white60),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.more_vert, color: Colors.white.withOpacity(0.5)),
+                  ],
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         );
       },
     );

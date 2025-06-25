@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class TabSelectorWidget extends StatefulWidget {
   const TabSelectorWidget({super.key});
@@ -9,38 +8,50 @@ class TabSelectorWidget extends StatefulWidget {
 }
 
 class _TabSelectorWidgetState extends State<TabSelectorWidget> {
-  int _selectedIndex = 0;
-  final List<String> _tabs = ['POPULAR', 'BY GENRE', 'BY MOOD'];
+  int selectedIndex = 0;
+  final List<String> tabs = ['POPULAR', 'BY GENRE', 'BY MOOD'];
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.start,
-      children: List.generate(_tabs.length, (index) {
-        final isSelected = index == _selectedIndex;
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedIndex = index;
-            });
-          },
-          child: Container(
-            margin: const EdgeInsets.only(right: 12), // Отступ между табами
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              // Используем голубой цвет для активного таба, как в макете
-              color: isSelected ? const Color(0xFF38B6FF) : Colors.transparent,
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Text(
-              _tabs[index],
-              style: GoogleFonts.montserrat(
-                fontWeight: FontWeight.w600, // Semi-Bold
-                fontSize: 14,
-                // Белый текст для активного, сероватый для остальных
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(tabs.length, (index) {
+        final isSelected = index == selectedIndex;
+        return Flexible(
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                selectedIndex = index;
+              });
+            },
+            // AnimatedContainer для плавной смены цвета и формы
+            child: AnimatedContainer(
+              duration: const Duration(
+                milliseconds: 300,
+              ), // Длительность анимации
+              curve: Curves.easeInOut, // Плавность перехода
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              decoration: BoxDecoration(
+                // Устанавливаем цвет: активный с прозрачностью или полностью прозрачный
                 color: isSelected
-                    ? Colors.white
-                    : Colors.white.withOpacity(0.6),
+                    ? const Color(0xBD1CA4FF)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(30),
+              ),
+              child: Center(
+                child: Text(
+                  tabs[index],
+                  style: TextStyle(
+                    // Текст тоже анимируется по цвету
+                    color: isSelected
+                        ? Colors.white
+                        : Colors.white.withOpacity(0.7),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ),

@@ -60,6 +60,15 @@ flutter:
     - assets/icons/menu.svg
     - assets/icons/settings.svg
     - assets/icons/logo.svg
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter_18pt-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter_18pt-SemiBold.ttf
+          weight: 600
+      
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

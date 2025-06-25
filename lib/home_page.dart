@@ -12,9 +12,11 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // Используем GlobalKey для связи между виджетами
   final GlobalKey<NowPlayingWidgetState> _nowPlayingKey =
       GlobalKey<NowPlayingWidgetState>();
 
+  // Эта функция будет вызвана из списка треков для обновления плеера
   void _onTrackSelected() {
     _nowPlayingKey.currentState?.fetchCurrentTrack();
   }
@@ -31,54 +33,59 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         child: SafeArea(
-          bottom: false, // Отключаем отступ снизу у SafeArea
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- Верхняя панель по макету ---
+                // Верхняя панель
                 SizedBox(
-                  height: 120, // Задаем высоту для позиционирования
+                  height: 90,
                   child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Positioned(
-                        top: 20,
-                        left: 0,
+                      Align(
+                        alignment: Alignment.centerLeft,
                         child: IconButton(
+                          // ИСПРАВЛЕНО: colorFilter заменен на color
                           icon: SvgPicture.asset(
                             'assets/icons/menu.svg',
-                            width: 24,
+                            color: Colors.white,
+                            width: 28,
                           ),
                           onPressed: () {},
+                          splashColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
                         ),
                       ),
+                      SvgPicture.asset('assets/icons/logo.svg', width: 140),
                       Align(
-                        alignment: Alignment.center,
-                        child: SvgPicture.asset(
-                          'assets/icons/logo.svg',
-                          width: 150,
-                        ),
-                      ),
-                      Positioned(
-                        top: 20,
-                        right: 0,
+                        alignment: Alignment.centerRight,
                         child: IconButton(
+                          // ИСПРАВЛЕНО: colorFilter заменен на color
                           icon: SvgPicture.asset(
                             'assets/icons/settings.svg',
-                            width: 24,
+                            color: Colors.white,
+                            width: 30,
                           ),
                           onPressed: () {},
+                          splashColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
                         ),
                       ),
                     ],
                   ),
                 ),
 
+                const SizedBox(height: 16),
+
                 NowPlayingWidget(key: _nowPlayingKey),
-                const SizedBox(height: 30),
+
+                const SizedBox(height: 32),
+
                 const TabSelectorWidget(),
-                const SizedBox(height: 20),
+
+                const SizedBox(height: 24),
 
                 Expanded(
                   child: TrackListWidget(onTrackSelected: _onTrackSelected),
@@ -96,9 +103,21 @@ class _HomePageState extends State<HomePage> {
         showUnselectedLabels: false,
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.video_library), label: ''),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: '',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search_outlined),
+            activeIcon: Icon(Icons.search),
+            label: '',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.library_music_outlined),
+            activeIcon: Icon(Icons.library_music),
+            label: '',
+          ),
         ],
       ),
     );
