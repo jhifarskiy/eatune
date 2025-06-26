@@ -158,3 +158,14 @@ async function startServer() {
 }
 
 startServer();
+
+// DEBUG: Получить текущую очередь
+app.get('/playlist/queue', (req, res) => {
+  res.json({
+    queue: playlistQueue.map(t => ({
+      id: t._id.toString(),
+      title: t.title
+    })),
+    currentIndex
+  });
+});
