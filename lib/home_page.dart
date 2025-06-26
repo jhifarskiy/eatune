@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'now_playing_widget.dart';
@@ -12,11 +13,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Используем GlobalKey для связи между виджетами
   final GlobalKey<NowPlayingWidgetState> _nowPlayingKey =
       GlobalKey<NowPlayingWidgetState>();
+  int _currentIndex = 0;
 
-  // Эта функция будет вызвана из списка треков для обновления плеера
   void _onTrackSelected() {
     _nowPlayingKey.currentState?.fetchCurrentTrack();
   }
@@ -47,7 +47,6 @@ class _HomePageState extends State<HomePage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: IconButton(
-                          // ИСПРАВЛЕНО: colorFilter заменен на color
                           icon: SvgPicture.asset(
                             'assets/icons/menu.svg',
                             color: Colors.white,
@@ -62,7 +61,6 @@ class _HomePageState extends State<HomePage> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: IconButton(
-                          // ИСПРАВЛЕНО: colorFilter заменен на color
                           icon: SvgPicture.asset(
                             'assets/icons/settings.svg',
                             color: Colors.white,
@@ -78,15 +76,10 @@ class _HomePageState extends State<HomePage> {
                 ),
 
                 const SizedBox(height: 16),
-
                 NowPlayingWidget(key: _nowPlayingKey),
-
                 const SizedBox(height: 32),
-
                 const TabSelectorWidget(),
-
                 const SizedBox(height: 24),
-
                 Expanded(
                   child: TrackListWidget(onTrackSelected: _onTrackSelected),
                 ),
@@ -98,15 +91,18 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: const Color(0xFF041C3E),
         selectedItemColor: Colors.white,
-        unselectedItemColor: const Color(
-          0xBD1CA4FF,
-        ), // #1CA4FF с 74% прозрачности
+        unselectedItemColor: const Color(0xBD1CA4FF),
         showSelectedLabels: false,
         showUnselectedLabels: false,
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 0, // можно будет сделать управление текущей вкладкой
+        currentIndex: _currentIndex,
         onTap: (index) {
-          // пока без действий
+          if (index == 1) {
+            showOrderModal(context);
+          } else {
+            setState(() {
+              _currentIndex = index;
+            });
+          }
         },
         items: [
           BottomNavigationBarItem(
@@ -126,13 +122,13 @@ class _HomePageState extends State<HomePage> {
           ),
           BottomNavigationBarItem(
             icon: SvgPicture.asset(
-              'assets/icons/search.svg',
+              'assets/icons/headphones.svg',
               width: 33,
               height: 33,
               color: const Color(0xBD1CA4FF),
             ),
             activeIcon: SvgPicture.asset(
-              'assets/icons/search.svg',
+              'assets/icons/headphones.svg',
               width: 33,
               height: 33,
               color: Colors.white,
@@ -141,13 +137,13 @@ class _HomePageState extends State<HomePage> {
           ),
           BottomNavigationBarItem(
             icon: SvgPicture.asset(
-              'assets/icons/playlist.svg',
+              'assets/icons/search.svg',
               width: 33,
               height: 33,
               color: const Color(0xBD1CA4FF),
             ),
             activeIcon: SvgPicture.asset(
-              'assets/icons/playlist.svg',
+              'assets/icons/search.svg',
               width: 33,
               height: 33,
               color: Colors.white,
@@ -158,4 +154,77 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+void showOrderModal(BuildContext context) {
+  showGeneralDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Заказ',
+    barrierColor: Colors.black.withOpacity(0.4),
+    transitionDuration: const Duration(milliseconds: 300),
+    pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+    transitionBuilder: (_, animation, __, ___) {
+      final curved = Curves.easeOut.transform(animation.value);
+      return Stack(
+        children: [
+          Opacity(
+            opacity: curved,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+              child: Container(color: Colors.black.withOpacity(0.2)),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Transform.translate(
+              offset: Offset(0, 100 * (1 - curved)),
+              child: Stack(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(
+                      left: 24,
+                      right: 24,
+                      bottom: 36,
+                    ),
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF041C3E),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: const DefaultTextStyle(
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        color: Colors.white,
+                        height: 1.5,
+                      ),
+                      child: Text(
+                        '🎧 Ваш заказ принят!\n'
+                        'Мы поставим вашу песню,\nкак только освободится очередь.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 12,
+                    top: 12,
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
 }

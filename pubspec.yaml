@@ -62,7 +62,7 @@ flutter:
     - assets/icons/logo.svg
     - assets/icons/home.svg
     - assets/icons/search.svg
-    - assets/icons/playlist.svg
+    - assets/icons/headphones.svg
 
   fonts:
     - family: Inter
