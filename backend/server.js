@@ -20,8 +20,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 const CURRENT_TRACK_FILE = path.join(__dirname, 'currentTrack.json');
 let playlistQueue = [];
 let defaultTracks = [];
+let defaultIndex = 0;
 
-// Загружаем текущий трек из файла (если был)
+// Загружаем текущий трек из файла
 let currentTrack = null;
 if (fs.existsSync(CURRENT_TRACK_FILE)) {
   try {
@@ -31,7 +32,7 @@ if (fs.existsSync(CURRENT_TRACK_FILE)) {
   }
 }
 
-// Возвращает все треки
+// Отдаёт все треки
 app.get('/tracks', async (req, res) => {
   try {
     const tracks = await tracksCollection.find({}).toArray();
@@ -74,44 +75,41 @@ app.post('/playlist/add', async (req, res) => {
   }
 });
 
-// Отдает текущий трек
+// Возвращает текущий трек
 app.get('/playlist/current', (req, res) => {
   res.json(currentTrack || null);
 });
 
-// Возвращает очередь (без текущего трека)
+// Возвращает очередь
 app.get('/playlist/queue', (req, res) => {
   res.json(playlistQueue);
 });
 
-// Получает прогресс и решает, переключаться или нет
+// Получает прогресс
 app.post('/progress', (req, res) => {
   const { currentTime } = req.body;
-  if (!currentTrack || !currentTime) return res.sendStatus(200);
+  if (!currentTrack || typeof currentTime !== 'number') return res.sendStatus(200);
 
-  // Если трек близок к концу — переключаем
   const [min, sec] = (currentTrack.duration || "0:00").split(":").map(Number);
   const durationSec = (min * 60) + sec;
 
-  if (durationSec > 0 && currentTime >= durationSec - 1) {
+  // Если текущий трек закончился (больше 95%) — переключаем
+  if (durationSec > 0 && currentTime >= durationSec * 0.95) {
     playNextTrack();
   }
 
   res.sendStatus(200);
 });
 
-// Логика переключения на следующий трек
+// Переключение трека
 function playNextTrack() {
   if (playlistQueue.length > 0) {
     currentTrack = playlistQueue.shift();
+  } else if (defaultTracks.length > 0) {
+    currentTrack = defaultTracks[defaultIndex];
+    defaultIndex = (defaultIndex + 1) % defaultTracks.length;
   } else {
-    // берём случайный трек из базы
-    if (defaultTracks.length > 0) {
-      const random = defaultTracks[Math.floor(Math.random() * defaultTracks.length)];
-      currentTrack = random;
-    } else {
-      currentTrack = null;
-    }
+    currentTrack = null;
   }
 
   if (currentTrack) {
@@ -120,7 +118,7 @@ function playNextTrack() {
   }
 }
 
-// Старт сервера и инициализация базы
+// Старт сервера
 async function startServer() {
   try {
     await client.connect();
