@@ -53,92 +53,95 @@
   </div>
 
   <script>
-    const audioPlayer = document.getElementById('audioPlayer');
-    const coverArt = document.getElementById('coverArt');
-    const trackTitle = document.getElementById('trackTitle');
-    const trackArtist = document.getElementById('trackArtist');
-    const playerContainer = document.getElementById('player-container');
-    const unlockAudioBtn = document.getElementById('unlockAudioBtn');
-    const playPauseBtn = document.getElementById('playPauseBtn');
-    const playIcon = document.getElementById('playIcon');
-    const pauseIcon = document.getElementById('pauseIcon');
-    const progressBarContainer = document.getElementById('progressBarContainer');
-    const progressBar = document.getElementById('progressBar');
-    const currentTimeEl = document.getElementById('currentTime');
-    const totalDurationEl = document.getElementById('totalDuration');
-    const queueContainer = document.getElementById('queue-container');
-    const queueList = document.getElementById('queueList');
+    document.addEventListener('DOMContentLoaded', function () {
+      console.log("DOMContentLoaded запущен");
 
-    let currentTrackId = null;
-    let isAudioUnlocked = false;
+      const audioPlayer = document.getElementById('audioPlayer');
+      const coverArt = document.getElementById('coverArt');
+      const trackTitle = document.getElementById('trackTitle');
+      const trackArtist = document.getElementById('trackArtist');
+      const playerContainer = document.getElementById('player-container');
+      const unlockAudioBtn = document.getElementById('unlockAudioBtn');
+      const playPauseBtn = document.getElementById('playPauseBtn');
+      const playIcon = document.getElementById('playIcon');
+      const pauseIcon = document.getElementById('pauseIcon');
+      const progressBarContainer = document.getElementById('progressBarContainer');
+      const progressBar = document.getElementById('progressBar');
+      const currentTimeEl = document.getElementById('currentTime');
+      const totalDurationEl = document.getElementById('totalDuration');
+      const queueContainer = document.getElementById('queue-container');
+      const queueList = document.getElementById('queueList');
 
-    async function reportProgress() {
-      if (audioPlayer.paused || !currentTrackId) return;
-      try {
-        await fetch('/progress', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ currentTime: audioPlayer.currentTime })
-        });
-      } catch (e) {}
-    }
+      let currentTrackId = null;
+      let isAudioUnlocked = false;
 
-    async function pollForTrack() {
-      try {
-        const res = await fetch('/playlist/current');
-        const data = await res.json();
-        if (data && data.id && data.id !== currentTrackId) {
-          currentTrackId = data.id;
-          updatePlayerUI(data);
-        } else if (!data && currentTrackId) {
-          currentTrackId = null;
-          resetPlayerUI();
+      async function reportProgress() {
+        if (audioPlayer.paused || !currentTrackId) return;
+        try {
+          await fetch('/progress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentTime: audioPlayer.currentTime })
+          });
+        } catch (e) {}
+      }
+
+      async function pollForTrack() {
+        try {
+          const res = await fetch('/playlist/current');
+          const data = await res.json();
+          if (data && data.id && data.id !== currentTrackId) {
+            currentTrackId = data.id;
+            updatePlayerUI(data);
+          } else if (!data && currentTrackId) {
+            currentTrackId = null;
+            resetPlayerUI();
+          }
+        } catch (err) {
+          console.error("pollForTrack error:", err);
         }
-      } catch (err) {
-        console.error("pollForTrack error:", err);
       }
-    }
 
-    async function pollForQueue() {
-      try {
-        const res = await fetch('/playlist/queue');
-        const queue = await res.json();
-        updateQueueUI(queue);
-      } catch (err) {}
-    }
-
-    function updatePlayerUI(track) {
-      trackTitle.textContent = track.title || 'Без названия';
-      trackArtist.textContent = track.artist || 'Неизвестный исполнитель';
-      coverArt.src = track.coverUrl || `https://placehold.co/400x400/1F2937/FFFFFF?text=${track.title.charAt(0)}`;
-      audioPlayer.src = track.trackUrl;
-      if (isAudioUnlocked) audioPlayer.play().catch(() => {});
-    }
-
-    function resetPlayerUI() {
-      audioPlayer.src = "";
-      coverArt.src = "https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune";
-      trackTitle.textContent = "Ожидание трека...";
-      trackArtist.textContent = "Выберите песню в приложении";
-    }
-
-    function updateQueueUI(queue) {
-      if (Array.isArray(queue) && queue.length > 0) {
-        queueContainer.classList.remove('hidden');
-        queueList.innerHTML = queue.map(track => `
-          <li class="bg-gray-700 px-4 py-2 rounded-lg flex flex-col">
-            <span class="text-sm font-medium truncate">${track.title}</span>
-            <span class="text-xs text-gray-400 truncate">${track.artist}</span>
-          </li>
-        `).join('');
-      } else {
-        queueContainer.classList.add('hidden');
-        queueList.innerHTML = '';
+      async function pollForQueue() {
+        try {
+          const res = await fetch('/playlist/queue');
+          const queue = await res.json();
+          updateQueueUI(queue);
+        } catch (err) {}
       }
-    }
 
-    unlockAudioBtn.addEventListener('click', () => {
-      audioPlayer.play().finally(() => {
+      function updatePlayerUI(track) {
+        trackTitle.textContent = track.title || 'Без названия';
+        trackArtist.textContent = track.artist || 'Неизвестный исполнитель';
+        coverArt.src = track.coverUrl || `https://placehold.co/400x400/1F2937/FFFFFF?text=${track.title.charAt(0)}`;
+        audioPlayer.src = track.trackUrl;
+        if (isAudioUnlocked) audioPlayer.play().catch(() => {});
+      }
+
+      function resetPlayerUI() {
+        audioPlayer.src = "";
+        coverArt.src = "https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune";
+        trackTitle.textContent = "Ожидание трека...";
+        trackArtist.textContent = "Выберите песню в приложении";
+      }
+
+      function updateQueueUI(queue) {
+        if (Array.isArray(queue) && queue.length > 0) {
+          queueContainer.classList.remove('hidden');
+          queueList.innerHTML = queue.map(track => `
+            <li class="bg-gray-700 px-4 py-2 rounded-lg flex flex-col">
+              <span class="text-sm font-medium truncate">${track.title}</span>
+              <span class="text-xs text-gray-400 truncate">${track.artist}</span>
+            </li>
+          `).join('');
+        } else {
+          queueContainer.classList.add('hidden');
+          queueList.innerHTML = '';
+        }
+      }
+
+      unlockAudioBtn.addEventListener('click', () => {
+        console.log('Нажата кнопка активации');
         isAudioUnlocked = true;
         unlockAudioBtn.classList.add('hidden');
         playerContainer.classList.remove('hidden');
@@ -148,43 +151,43 @@
         pollForTrack();
         pollForQueue();
       });
-    });
 
-    playPauseBtn.addEventListener('click', () =>
-      audioPlayer.paused ? audioPlayer.play() : audioPlayer.pause()
-    );
+      playPauseBtn.addEventListener('click', () =>
+        audioPlayer.paused ? audioPlayer.play() : audioPlayer.pause()
+      );
 
-    audioPlayer.onplay = () => {
-      playIcon.classList.add('hidden');
-      pauseIcon.classList.remove('hidden');
-    };
+      audioPlayer.onplay = () => {
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+      };
 
-    audioPlayer.onpause = () => {
-      playIcon.classList.remove('hidden');
-      pauseIcon.classList.add('hidden');
-    };
+      audioPlayer.onpause = () => {
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+      };
 
-    audioPlayer.addEventListener('timeupdate', () => {
-      const { currentTime, duration } = audioPlayer;
-      if (duration) {
-        progressBar.style.width = `${(currentTime / duration) * 100}%`;
-        currentTimeEl.textContent = formatTime(currentTime);
-        totalDurationEl.textContent = formatTime(duration);
+      audioPlayer.addEventListener('timeupdate', () => {
+        const { currentTime, duration } = audioPlayer;
+        if (duration) {
+          progressBar.style.width = `${(currentTime / duration) * 100}%`;
+          currentTimeEl.textContent = formatTime(currentTime);
+          totalDurationEl.textContent = formatTime(duration);
+        }
+      });
+
+      progressBarContainer.addEventListener('click', (e) => {
+        const { duration } = audioPlayer;
+        if (duration) {
+          const clickX = e.offsetX;
+          const newTime = (clickX / progressBarContainer.clientWidth) * duration;
+          audioPlayer.currentTime = newTime;
+        }
+      });
+
+      function formatTime(s) {
+        return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
       }
     });
-
-    progressBarContainer.addEventListener('click', (e) => {
-      const { duration } = audioPlayer;
-      if (duration) {
-        const clickX = e.offsetX;
-        const newTime = (clickX / progressBarContainer.clientWidth) * duration;
-        audioPlayer.currentTime = newTime;
-      }
-    });
-
-    function formatTime(s) {
-      return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
-    }
   </script>
 </body>
 </html>
