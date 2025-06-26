@@ -44,7 +44,7 @@ class ApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/playlist/add'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({'trackId': id}),
+      body: json.encode({'id': id}), // было trackId, стало id
     );
     return response.statusCode == 200;
   }

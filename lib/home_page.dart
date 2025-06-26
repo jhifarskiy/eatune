@@ -12,7 +12,8 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
   final GlobalKey<NowPlayingWidgetState> _nowPlayingKey =
       GlobalKey<NowPlayingWidgetState>();
   int _currentIndex = 0;
@@ -24,6 +25,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true, // Позволяет телу рисоваться под навбаром
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -33,12 +35,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         child: SafeArea(
+          bottom: false, // Отключаем нижний отступ, чтобы навбар прилегал
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Верхняя панель
+                // Верхняя панель (без изменений)
                 SizedBox(
                   height: 90,
                   child: Stack(
@@ -83,147 +86,164 @@ class _HomePageState extends State<HomePage> {
                 Expanded(
                   child: TrackListWidget(onTrackSelected: _onTrackSelected),
                 ),
+                const SizedBox(height: 85),
               ],
             ),
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF041C3E),
-        selectedItemColor: Colors.white,
-        unselectedItemColor: const Color(0xBD1CA4FF),
-        showSelectedLabels: false,
-        showUnselectedLabels: false,
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          if (index == 1) {
-            showOrderModal(context);
-          } else {
-            setState(() {
-              _currentIndex = index;
-            });
-          }
-        },
-        items: [
-          BottomNavigationBarItem(
-            icon: SvgPicture.asset(
-              'assets/icons/home.svg',
-              width: 33,
-              height: 33,
-              color: const Color(0xBD1CA4FF),
-            ),
-            activeIcon: SvgPicture.asset(
-              'assets/icons/home.svg',
-              width: 33,
-              height: 33,
-              color: Colors.white,
-            ),
-            label: '',
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(
+          splashFactory: NoSplash.splashFactory,
+          highlightColor: Colors.transparent,
+        ),
+        child: Container(
+          height: 80 + MediaQuery.of(context).padding.bottom,
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).padding.bottom,
           ),
-          BottomNavigationBarItem(
-            icon: SvgPicture.asset(
-              'assets/icons/headphones.svg',
-              width: 33,
-              height: 33,
-              color: const Color(0xBD1CA4FF),
-            ),
-            activeIcon: SvgPicture.asset(
-              'assets/icons/headphones.svg',
-              width: 33,
-              height: 33,
-              color: Colors.white,
-            ),
-            label: '',
+          color: Colors.transparent,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildNavItem(0, 'assets/icons/home.svg'),
+              _buildNavItem(1, 'assets/icons/headphones.svg'),
+              _buildNavItem(2, 'assets/icons/search.svg'),
+            ],
           ),
-          BottomNavigationBarItem(
-            icon: SvgPicture.asset(
-              'assets/icons/search.svg',
-              width: 33,
-              height: 33,
-              color: const Color(0xBD1CA4FF),
+        ),
+      ),
+    );
+  }
+
+  // --- ИЗМЕНЕННЫЙ МЕТОД ДЛЯ ИКОНОК С "ПУЗЫРЬКОМ" ---
+  Widget _buildNavItem(int index, String asset) {
+    final isSelected = _currentIndex == index;
+    return GestureDetector(
+      onTap: () {
+        if (index == 1) {
+          showOrderModal(context);
+        } else {
+          setState(() {
+            _currentIndex = index;
+          });
+        }
+      },
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 72, // Задаем фиксированную область для нажатия
+        height: 64,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // "Пузырек", который теперь анимируется через масштаб и прозрачность
+            AnimatedScale(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutBack, // Эффект "выпрыгивания"
+              scale: isSelected ? 1.0 : 0.0,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: isSelected ? 1.0 : 0.0,
+                child: Container(
+                  width: 64,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1CA4FF),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+              ),
             ),
-            activeIcon: SvgPicture.asset(
-              'assets/icons/search.svg',
-              width: 33,
-              height: 33,
-              color: Colors.white,
-            ),
-            label: '',
-          ),
-        ],
+            // Сама иконка, которая теперь не двигается
+            SvgPicture.asset(asset, width: 30, height: 30, color: Colors.white),
+          ],
+        ),
       ),
     );
   }
 }
 
+// --- КРАСИВАЯ МОДАЛКА (БЕЗ ИЗМЕНЕНИЙ) ---
 void showOrderModal(BuildContext context) {
   showGeneralDialog(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Заказ',
-    barrierColor: Colors.black.withOpacity(0.4),
-    transitionDuration: const Duration(milliseconds: 300),
+    barrierColor: Colors.black.withOpacity(0.5),
+    transitionDuration: const Duration(milliseconds: 350),
     pageBuilder: (_, __, ___) => const SizedBox.shrink(),
-    transitionBuilder: (_, animation, __, ___) {
-      final curved = Curves.easeOut.transform(animation.value);
-      return Stack(
-        children: [
-          Opacity(
-            opacity: curved,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
-              child: Container(color: Colors.black.withOpacity(0.2)),
-            ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Transform.translate(
-              offset: Offset(0, 100 * (1 - curved)),
-              child: Stack(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(
-                      left: 24,
-                      right: 24,
-                      bottom: 36,
-                    ),
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF041C3E),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: const DefaultTextStyle(
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                        color: Colors.white,
-                        height: 1.5,
+    transitionBuilder: (_, animation, __, child) {
+      final scaleAnimation = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutQuart,
+        reverseCurve: Curves.easeOutCubic,
+      );
+
+      return ScaleTransition(
+        scale: scaleAnimation,
+        child: FadeTransition(
+          opacity: animation,
+          child: Dialog(
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A3A6D),
+                    borderRadius: BorderRadius.circular(50.0),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Заказ принят!',
+                        style: TextStyle(
+                          fontFamily: 'Montserrat',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 20,
+                          color: Colors.white,
+                        ),
                       ),
-                      child: Text(
-                        '🎧 Ваш заказ принят!\n'
+                      const SizedBox(height: 12),
+                      Text(
                         'Мы поставим вашу песню,\nкак только освободится очередь.',
                         textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w400,
+                          fontSize: 15,
+                          color: Colors.white.withOpacity(0.7),
+                          height: 1.5,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                  Positioned(
-                    right: 12,
-                    top: 12,
-                    child: GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
-                      child: const Icon(
+                ),
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: IconButton(
+                      icon: const Icon(
                         Icons.close,
-                        color: Colors.white,
-                        size: 24,
+                        color: Colors.white54,
+                        size: 22,
                       ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      splashRadius: 20,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       );
     },
   );

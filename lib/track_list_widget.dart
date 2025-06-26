@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'api.dart';
 
@@ -26,78 +27,47 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     });
   }
 
-  void _confirmAndSelectTrack(String id) async {
-    final result = await showGeneralDialog<bool>(
+  // Новый метод для показа модального окна подтверждения
+  void _showConfirmationModal(Track track) {
+    showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Добавить в плейлист?',
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
-      transitionBuilder: (context, anim1, anim2, child) {
-        return Transform.scale(
-          scale: Curves.easeOutBack.transform(anim1.value),
-          child: Opacity(
-            opacity: anim1.value,
-            child: AlertDialog(
-              backgroundColor: const Color(0xFF041C3E),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: const Text(
-                'Добавить в плейлист?',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text(
-                    'Отмена',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      color: Colors.white54,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text(
-                    'Добавить',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      color: Color(0xFF1CA4FF),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+      barrierLabel: '',
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 350),
+      pageBuilder: (context, _, __) {
+        return _TrackConfirmationDialog(
+          track: track,
+          onConfirm: () {
+            // При подтверждении отправляем запрос на сервер
+            _confirmTrackSelection(track.id);
+            Navigator.of(context).pop();
+          },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutQuart,
             ),
+            child: child,
           ),
         );
       },
     );
-
-    if (result == true) {
-      _selectTrack(id);
-    }
   }
 
-  void _selectTrack(String id) async {
+  // Метод, который вызывается после подтверждения в модалке
+  void _confirmTrackSelection(String id) async {
     setState(() {
       selectedTrackId = id;
     });
-
     bool success = await ApiService.selectTrack(id);
     if (success) {
       widget.onTrackSelected();
-      showBottomSlideUpMessage(
-        context,
-        '🎧 Ваш заказ принят!\nМы поставим вашу песню\nсразу, как освободится очередь.',
-      );
     }
   }
 
@@ -111,7 +81,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
             child: CircularProgressIndicator(color: Colors.white),
           );
         }
-
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
           return Center(
             child: Text(
@@ -123,14 +92,15 @@ class _TrackListWidgetState extends State<TrackListWidget> {
 
         final tracks = snapshot.data!;
         return ListView.builder(
-          padding: EdgeInsets.zero,
+          padding: EdgeInsets.zero, // Убираем отступы по умолчанию
           itemCount: tracks.length,
           itemBuilder: (context, index) {
             final track = tracks[index];
+            final isSelected = selectedTrackId == track.id;
 
-            return InkWell(
-              onTap: () => _confirmAndSelectTrack(track.id),
-              borderRadius: BorderRadius.circular(12),
+            // Используем новый виджет с анимацией нажатия
+            return _AnimatedTrackItem(
+              onTap: () => _showConfirmationModal(track),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: Row(
@@ -163,11 +133,9 @@ class _TrackListWidgetState extends State<TrackListWidget> {
                           Text(
                             track.title,
                             style: const TextStyle(
-                              fontFamily: 'Inter',
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              decoration: TextDecoration.none,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -176,10 +144,9 @@ class _TrackListWidgetState extends State<TrackListWidget> {
                           Text(
                             track.artist,
                             style: TextStyle(
-                              fontFamily: 'Inter',
                               color: Colors.white.withOpacity(0.5),
                               fontSize: 14,
-                              decoration: TextDecoration.none,
+                              fontWeight: FontWeight.w400,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -191,14 +158,18 @@ class _TrackListWidgetState extends State<TrackListWidget> {
                     Text(
                       track.duration,
                       style: TextStyle(
-                        fontFamily: 'Inter',
                         color: Colors.white.withOpacity(0.5),
                         fontSize: 14,
-                        decoration: TextDecoration.none,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Icon(Icons.more_vert, color: Colors.white.withOpacity(0.5)),
+                    Icon(
+                      Icons.more_vert,
+                      color: isSelected
+                          ? Colors.white
+                          : Colors.white.withOpacity(0.5),
+                    ),
                   ],
                 ),
               ),
@@ -210,84 +181,187 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   }
 }
 
-// --- Кастомная выезжающая карточка подтверждения ---
-void showBottomSlideUpMessage(BuildContext context, String message) {
-  showGeneralDialog(
-    context: context,
-    barrierDismissible: false,
-    barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 300),
-    pageBuilder: (_, __, ___) => _BottomMessagePanel(message: message),
-  );
-}
+// Виджет для стильного эффекта "продавливания" при нажатии на трек
+class _AnimatedTrackItem extends StatefulWidget {
+  final VoidCallback onTap;
+  final Widget child;
 
-class _BottomMessagePanel extends StatefulWidget {
-  final String message;
-
-  const _BottomMessagePanel({required this.message});
+  const _AnimatedTrackItem({required this.onTap, required this.child});
 
   @override
-  State<_BottomMessagePanel> createState() => _BottomMessagePanelState();
+  __AnimatedTrackItemState createState() => __AnimatedTrackItemState();
 }
 
-class _BottomMessagePanelState extends State<_BottomMessagePanel>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Offset> _offset;
+class __AnimatedTrackItemState extends State<_AnimatedTrackItem> {
+  bool _isPressed = false;
 
   @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
     );
-    _offset = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  }
+}
 
-    _controller.forward();
+// Новый виджет для модального окна подтверждения
+class _TrackConfirmationDialog extends StatelessWidget {
+  final Track track;
+  final VoidCallback onConfirm;
 
-    Future.delayed(const Duration(seconds: 5), () {
-      _controller.reverse().then((_) => Navigator.of(context).pop());
+  const _TrackConfirmationDialog({
+    required this.track,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // ИСПРАВЛЕНО: Проверяем, есть ли обложка
+    final bool hasCover = track.coverUrl != null && track.coverUrl!.isNotEmpty;
+
+    return Dialog(
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A3A6D).withOpacity(0.9),
+            borderRadius: BorderRadius.circular(40),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ИСПРАВЛЕНО: Показываем обложку только если она есть
+              if (hasCover)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.network(
+                      track.coverUrl!,
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              Text(
+                track.title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                track.artist,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.white.withOpacity(0.6),
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Отмена',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  _ConfirmAddButton(onConfirm: onConfirm),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Отдельный виджет для кнопки "Добавить" с анимацией
+class _ConfirmAddButton extends StatefulWidget {
+  final VoidCallback onConfirm;
+
+  const _ConfirmAddButton({required this.onConfirm});
+
+  @override
+  __ConfirmAddButtonState createState() => __ConfirmAddButtonState();
+}
+
+class __ConfirmAddButtonState extends State<_ConfirmAddButton> {
+  bool _isAdding = false;
+  bool _isAdded = false;
+
+  void _handleAdd() {
+    if (_isAdding || _isAdded) return;
+
+    setState(() => _isAdding = true);
+
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) {
+        setState(() {
+          _isAdded = true;
+          widget.onConfirm();
+        });
+      }
     });
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.of(context).size.height;
-
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: SlideTransition(
-        position: _offset,
-        child: Container(
-          height: height * 0.4,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          decoration: const BoxDecoration(
-            color: Color(0xFF1CA4FF),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    return GestureDetector(
+      onTap: _handleAdd,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        width: 120,
+        height: 48,
+        decoration: BoxDecoration(
+          color: _isAdding ? Colors.transparent : const Color(0xFF1CA4FF),
+          border: Border.all(
+            color: const Color(0xFF1CA4FF),
+            width: _isAdding ? 2 : 0,
           ),
-          child: Center(
-            child: Text(
-              widget.message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 16,
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                decoration: TextDecoration.none,
-              ),
-            ),
-          ),
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Center(
+          child: _isAdded
+              ? const Icon(Icons.check, color: Color(0xFF1CA4FF))
+              : Text(
+                  'Добавить',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
         ),
       ),
     );
