@@ -9,7 +9,7 @@ const port = process.env.PORT || 3000;
 
 // --- НАСТРОЙКИ ПОДКЛЮЧЕНИЯ ---
 // Не забудьте вставить свой пароль в переменные окружения на Render.com
-const mongoUri = process.env.MONGO_URI || "mongodb+srv://jhifarskiy:<>@eatune.8vrsmid.mongodb.net/?retryWrites=true&w=majority&appName=Eatune";
+const mongoUri = process.env.MONGO_URI || "mongodb+srv://jhifarskiy:83leva35@eatune.8vrsmid.mongodb.net/?retryWrites=true&w=majority&appName=Eatune";
 const client = new MongoClient(mongoUri);
 const dbName = 'eatune';
 const collectionName = 'tracks';
