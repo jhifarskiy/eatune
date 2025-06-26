@@ -20,7 +20,7 @@
       <h1 id="trackTitle" class="text-2xl font-bold truncate">Ожидание трека...</h1>
       <p id="trackArtist" class="text-md text-gray-400">Выберите песню в приложении</p>
     </div>
-    <audio id="audioPlayer"></audio>
+    <audio id="audioPlayer" preload="auto"></audio>
     <div class="space-y-3">
       <div class="w-full">
         <div id="progressBarContainer" class="bg-gray-700 h-2 rounded-full w-full cursor-pointer">
@@ -62,6 +62,51 @@
     let currentTrackId = null;
     let isAudioUnlocked = false;
 
+    unlockAudioBtn.addEventListener('click', () => {
+      isAudioUnlocked = true;
+      unlockAudioBtn.classList.add('hidden');
+      playerContainer.classList.remove('hidden');
+      pollForTrack(); // запускаем сразу
+      setInterval(pollForTrack, 4000);
+      setInterval(reportProgress, 2000);
+    });
+
+    async function pollForTrack() {
+      try {
+        const res = await fetch('/playlist/current');
+        const data = await res.json();
+        if (data && data.id && data.id !== currentTrackId) {
+          currentTrackId = data.id;
+          loadAndPlayTrack(data);
+        } else if (!data && currentTrackId) {
+          currentTrackId = null;
+          resetPlayerUI();
+        }
+      } catch (err) {
+        console.error("pollForTrack error:", err);
+      }
+    }
+
+    function loadAndPlayTrack(track) {
+      trackTitle.textContent = track.title || 'Без названия';
+      trackArtist.textContent = track.artist || 'Неизвестный исполнитель';
+      coverArt.src = track.coverUrl || `https://placehold.co/400x400/1F2937/FFFFFF?text=${track.title.charAt(0)}`;
+      audioPlayer.src = track.trackUrl;
+
+      audioPlayer.oncanplaythrough = () => {
+        if (isAudioUnlocked) {
+          audioPlayer.play().catch(e => console.error("Autoplay error:", e));
+        }
+      };
+    }
+
+    function resetPlayerUI() {
+      audioPlayer.src = "";
+      coverArt.src = "https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune";
+      trackTitle.textContent = "Ожидание трека...";
+      trackArtist.textContent = "Выберите песню в приложении";
+    }
+
     async function reportProgress() {
       if (audioPlayer.paused || !currentTrackId) return;
       try {
@@ -73,51 +118,9 @@
       } catch (e) { console.error('reportProgress error:', e); }
     }
 
-    async function pollForTrack() {
-      try {
-        const res = await fetch('/playlist/current');
-        const data = await res.json();
-        if (data && data.id && data.id !== currentTrackId) {
-          currentTrackId = data.id;
-          updatePlayerUI(data);
-        } else if (!data && currentTrackId) {
-          currentTrackId = null;
-          resetPlayerUI();
-        }
-      } catch (err) {
-        console.error("pollForTrack error:", err);
-      }
-    }
-
-    function updatePlayerUI(track) {
-      trackTitle.textContent = track.title || 'Без названия';
-      trackArtist.textContent = track.artist || 'Неизвестный исполнитель';
-      coverArt.src = track.coverUrl || `https://placehold.co/400x400/1F2937/FFFFFF?text=${track.title.charAt(0)}`;
-      audioPlayer.src = track.trackUrl;
-      if (isAudioUnlocked) audioPlayer.play().catch(e => console.error("Autoplay fail:", e));
-    }
-
-    function resetPlayerUI() {
-      audioPlayer.src = "";
-      coverArt.src = "https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune";
-      trackTitle.textContent = "Ожидание трека...";
-      trackArtist.textContent = "Выберите песню в приложении";
-    }
-
-    unlockAudioBtn.addEventListener('click', () => {
-      audioPlayer.play().finally(() => {
-        isAudioUnlocked = true;
-        unlockAudioBtn.classList.add('hidden');
-        playerContainer.classList.remove('hidden');
-        setInterval(reportProgress, 2000);
-        setInterval(pollForTrack, 4000);
-        pollForTrack();
-      });
+    playPauseBtn.addEventListener('click', () => {
+      audioPlayer.paused ? audioPlayer.play() : audioPlayer.pause();
     });
-
-    playPauseBtn.addEventListener('click', () =>
-      audioPlayer.paused ? audioPlayer.play() : audioPlayer.pause()
-    );
 
     audioPlayer.onplay = () => {
       playIcon.classList.add('hidden');
@@ -141,8 +144,7 @@
     progressBarContainer.addEventListener('click', (e) => {
       const { duration } = audioPlayer;
       if (duration) {
-        const clickX = e.offsetX;
-        const newTime = (clickX / progressBarContainer.clientWidth) * duration;
+        const newTime = (e.offsetX / progressBarContainer.clientWidth) * duration;
         audioPlayer.currentTime = newTime;
       }
     });
