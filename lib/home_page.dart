@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'now_playing_widget.dart';
 import 'tab_selector_widget.dart';
 import 'track_list_widget.dart';
+import 'queue_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -25,7 +26,7 @@ class _HomePageState extends State<HomePage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: true, // Позволяет телу рисоваться под навбаром
+      extendBody: true,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -35,13 +36,12 @@ class _HomePageState extends State<HomePage>
           ),
         ),
         child: SafeArea(
-          bottom: false, // Отключаем нижний отступ, чтобы навбар прилегал
+          bottom: false,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Верхняя панель (без изменений)
                 SizedBox(
                   height: 90,
                   child: Stack(
@@ -77,7 +77,6 @@ class _HomePageState extends State<HomePage>
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 16),
                 NowPlayingWidget(key: _nowPlayingKey),
                 const SizedBox(height: 32),
@@ -100,15 +99,18 @@ class _HomePageState extends State<HomePage>
         child: Container(
           height: 80 + MediaQuery.of(context).padding.bottom,
           padding: EdgeInsets.only(
+            // ИСПРАВЛЕНО: Добавляем отступ сверху, чтобы опустить иконки
+            top: 10,
             bottom: MediaQuery.of(context).padding.bottom,
           ),
           color: Colors.transparent,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment:
+                CrossAxisAlignment.start, // Выравниваем по верху
             children: [
               _buildNavItem(0, 'assets/icons/home.svg'),
-              _buildNavItem(1, 'assets/icons/headphones.svg'),
+              _buildNavItem(1, 'assets/icons/playlist.svg'),
               _buildNavItem(2, 'assets/icons/search.svg'),
             ],
           ),
@@ -117,13 +119,13 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  // --- ИЗМЕНЕННЫЙ МЕТОД ДЛЯ ИКОНОК С "ПУЗЫРЬКОМ" ---
   Widget _buildNavItem(int index, String asset) {
     final isSelected = _currentIndex == index;
     return GestureDetector(
       onTap: () {
         if (index == 1) {
-          showOrderModal(context);
+          // ИСПРАВЛЕНО: Используем новую красивую анимацию
+          Navigator.of(context).push(_createSlideUpRoute());
         } else {
           setState(() {
             _currentIndex = index;
@@ -132,15 +134,14 @@ class _HomePageState extends State<HomePage>
       },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 72, // Задаем фиксированную область для нажатия
+        width: 72,
         height: 64,
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // "Пузырек", который теперь анимируется через масштаб и прозрачность
             AnimatedScale(
               duration: const Duration(milliseconds: 350),
-              curve: Curves.easeOutBack, // Эффект "выпрыгивания"
+              curve: Curves.easeOutBack,
               scale: isSelected ? 1.0 : 0.0,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 200),
@@ -155,7 +156,6 @@ class _HomePageState extends State<HomePage>
                 ),
               ),
             ),
-            // Сама иконка, которая теперь не двигается
             SvgPicture.asset(asset, width: 30, height: 30, color: Colors.white),
           ],
         ),
@@ -164,7 +164,34 @@ class _HomePageState extends State<HomePage>
   }
 }
 
-// --- КРАСИВАЯ МОДАЛКА (БЕЗ ИЗМЕНЕНИЙ) ---
+// ИСПРАВЛЕНО: Новый метод для создания плавной анимации "выезда" снизу
+Route _createSlideUpRoute() {
+  return PageRouteBuilder(
+    // Делаем фон страницы прозрачным, чтобы видеть старый экран во время анимации
+    opaque: false,
+    pageBuilder: (context, animation, secondaryAnimation) => const QueuePage(),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      const begin = Offset(0.0, 1.0); // Начинаем снизу
+      const end = Offset.zero; // Заканчиваем по центру
+      const curve = Curves.easeOutQuart; // Плавная кривая
+
+      final tween = Tween(
+        begin: begin,
+        end: end,
+      ).chain(CurveTween(curve: curve));
+      final offsetAnimation = animation.drive(tween);
+
+      // Комбинируем "выезд" и "проявление"
+      return SlideTransition(
+        position: offsetAnimation,
+        child: FadeTransition(opacity: animation, child: child),
+      );
+    },
+    transitionDuration: const Duration(milliseconds: 400),
+  );
+}
+
+// Твоя красивая модалка, которая больше не используется в навбаре
 void showOrderModal(BuildContext context) {
   showGeneralDialog(
     context: context,

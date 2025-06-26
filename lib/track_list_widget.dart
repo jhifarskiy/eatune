@@ -13,7 +13,6 @@ class TrackListWidget extends StatefulWidget {
 
 class _TrackListWidgetState extends State<TrackListWidget> {
   late Future<List<Track>> futureTracks;
-  String? selectedTrackId;
 
   @override
   void initState() {
@@ -27,7 +26,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     });
   }
 
-  // Новый метод для показа модального окна подтверждения
   void _showConfirmationModal(Track track) {
     showGeneralDialog(
       context: context,
@@ -39,7 +37,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
         return _TrackConfirmationDialog(
           track: track,
           onConfirm: () {
-            // При подтверждении отправляем запрос на сервер
             _confirmTrackSelection(track.id);
             Navigator.of(context).pop();
           },
@@ -60,14 +57,27 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     );
   }
 
-  // Метод, который вызывается после подтверждения в модалке
   void _confirmTrackSelection(String id) async {
-    setState(() {
-      selectedTrackId = id;
-    });
-    bool success = await ApiService.selectTrack(id);
+    bool success = await ApiService.addToQueue(id);
+    if (!mounted) return;
+
     if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Трек добавлен в очередь!'),
+          backgroundColor: Color(0xFF1CA4FF),
+          duration: Duration(seconds: 2),
+        ),
+      );
       widget.onTrackSelected();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Не удалось добавить трек'),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -92,13 +102,10 @@ class _TrackListWidgetState extends State<TrackListWidget> {
 
         final tracks = snapshot.data!;
         return ListView.builder(
-          padding: EdgeInsets.zero, // Убираем отступы по умолчанию
+          padding: EdgeInsets.zero,
           itemCount: tracks.length,
           itemBuilder: (context, index) {
             final track = tracks[index];
-            final isSelected = selectedTrackId == track.id;
-
-            // Используем новый виджет с анимацией нажатия
             return _AnimatedTrackItem(
               onTap: () => _showConfirmationModal(track),
               child: Padding(
@@ -164,12 +171,7 @@ class _TrackListWidgetState extends State<TrackListWidget> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Icon(
-                      Icons.more_vert,
-                      color: isSelected
-                          ? Colors.white
-                          : Colors.white.withOpacity(0.5),
-                    ),
+                    Icon(Icons.more_vert, color: Colors.white.withOpacity(0.5)),
                   ],
                 ),
               ),
@@ -181,7 +183,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   }
 }
 
-// Виджет для стильного эффекта "продавливания" при нажатии на трек
 class _AnimatedTrackItem extends StatefulWidget {
   final VoidCallback onTap;
   final Widget child;
@@ -214,7 +215,6 @@ class __AnimatedTrackItemState extends State<_AnimatedTrackItem> {
   }
 }
 
-// Новый виджет для модального окна подтверждения
 class _TrackConfirmationDialog extends StatelessWidget {
   final Track track;
   final VoidCallback onConfirm;
@@ -226,9 +226,7 @@ class _TrackConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ИСПРАВЛЕНО: Проверяем, есть ли обложка
     final bool hasCover = track.coverUrl != null && track.coverUrl!.isNotEmpty;
-
     return Dialog(
       elevation: 0,
       backgroundColor: Colors.transparent,
@@ -243,7 +241,6 @@ class _TrackConfirmationDialog extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ИСПРАВЛЕНО: Показываем обложку только если она есть
               if (hasCover)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16.0),
@@ -305,7 +302,6 @@ class _TrackConfirmationDialog extends StatelessWidget {
   }
 }
 
-// Отдельный виджет для кнопки "Добавить" с анимацией
 class _ConfirmAddButton extends StatefulWidget {
   final VoidCallback onConfirm;
 
