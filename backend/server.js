@@ -8,7 +8,6 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // --- НАСТРОЙКИ ПОДКЛЮЧЕНИЯ ---
-// Не забудьте вставить свой пароль в переменные окружения на Render.com
 const mongoUri = process.env.MONGO_URI || "mongodb+srv://jhifarskiy:83leva35@eatune.8vrsmid.mongodb.net/?retryWrites=true&w=majority&appName=Eatune";
 const client = new MongoClient(mongoUri);
 const dbName = 'eatune';
@@ -19,7 +18,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Используем новый файл для очереди
 const QUEUE_FILE = path.join(__dirname, 'queue.json');
 
 // --- Хелперы для работы с очередью ---
@@ -29,7 +27,6 @@ function readQueue() {
     }
     try {
         const data = fs.readFileSync(QUEUE_FILE, 'utf-8');
-        // Если файл пустой, возвращаем пустой массив
         if (data.trim() === '') return [];
         return JSON.parse(data);
     } catch (e) {
@@ -45,7 +42,7 @@ function writeQueue(queue) {
 
 // --- Маршруты API ---
 
-// [ВОССТАНОВЛЕНО] Отдает список всех доступных треков из БД
+// Отдает список всех доступных треков из БД
 app.get('/tracks', async (req, res) => {
     if (!tracksCollection) {
         return res.status(503).json({ error: "Database not connected" });
@@ -67,20 +64,41 @@ app.get('/tracks', async (req, res) => {
     }
 });
 
-// [ИЗМЕНЕНО] Отдает текущий играющий трек (первый в очереди)
+// Отдает текущий играющий трек (первый в очереди)
 app.get('/track', (req, res) => {
     const queue = readQueue();
     const nowPlaying = queue.length > 0 ? queue[0] : null;
     res.json(nowPlaying);
 });
 
-// [НОВЫЙ] Отдает всю очередь целиком
+// [НОВЫЙ] Маршрут для обновления прогресса текущего трека
+app.post('/track/progress', (req, res) => {
+    const { currentTime } = req.body;
+    // Проверяем, что currentTime это число
+    if (typeof currentTime !== 'number') {
+        return res.status(400).json({ error: 'currentTime must be a number' });
+    }
+
+    let queue = readQueue();
+    if (queue.length > 0) {
+        // Обновляем время у первого трека в очереди
+        queue[0].currentTime = currentTime;
+        queue[0].lastUpdate = Date.now();
+        writeQueue(queue);
+        return res.status(200).json({ success: true });
+    }
+
+    // Если очередь пуста, ничего не делаем
+    res.status(404).json({ error: 'Queue is empty, nothing to update' });
+});
+
+// Отдает всю очередь целиком
 app.get('/queue', (req, res) => {
     const queue = readQueue();
     res.json(queue);
 });
 
-// [НОВЫЙ] Добавляет трек в конец очереди
+// Добавляет трек в конец очереди
 app.post('/queue', async (req, res) => {
     const { id } = req.body;
     if (!id) return res.status(400).json({ error: 'Track ID is required' });
@@ -89,7 +107,6 @@ app.post('/queue', async (req, res) => {
         const selectedTrack = await tracksCollection.findOne({ _id: new ObjectId(id) });
         if (!selectedTrack) return res.status(404).json({ error: 'Track not found' });
         
-        // [ВОССТАНОВЛЕНО] Формируем полный объект трека
         const trackData = {
             id: selectedTrack._id.toString(),
             title: selectedTrack.title || "Без названия",
@@ -97,12 +114,11 @@ app.post('/queue', async (req, res) => {
             duration: selectedTrack.duration || "0:00",
             trackUrl: selectedTrack.url,
             coverUrl: selectedTrack.coverUrl || null,
-            currentTime: 0, 
+            currentTime: 0, // При добавлении трек всегда начинается с 0
             lastUpdate: Date.now()
         };
 
         const queue = readQueue();
-        // Проверка, чтобы не добавлять один и тот же трек подряд
         if (queue.find(t => t.id === trackData.id)) {
             return res.status(409).json({ error: "Track is already in the queue" });
         }
@@ -119,11 +135,11 @@ app.post('/queue', async (req, res) => {
     }
 });
 
-// [НОВЫЙ] Удаляет текущий трек и сдвигает очередь (для плеера)
+// Удаляет текущий трек и сдвигает очередь (для плеера)
 app.post('/track/next', (req, res) => {
     let queue = readQueue();
     if (queue.length > 0) {
-        const finishedTrack = queue.shift(); // Удаляем первый элемент
+        const finishedTrack = queue.shift();
         writeQueue(queue);
         console.log(`Track "${finishedTrack.title}" finished. Next track is "${queue[0]?.title || 'none'}".`);
         res.status(200).json({ success: true, nextTrack: queue[0] || null });
@@ -134,7 +150,6 @@ app.post('/track/next', (req, res) => {
 
 
 // --- Запуск сервера ---
-// [ВОССТАНОВЛЕНО] Полная реализация функции
 async function startServer() {
     try {
         await client.connect();
@@ -142,7 +157,6 @@ async function startServer() {
         const db = client.db(dbName);
         tracksCollection = db.collection(collectionName);
         
-        // Инициализируем очередь пустым массивом при старте, если файла нет
         if (!fs.existsSync(QUEUE_FILE)) {
             writeQueue([]);
         }

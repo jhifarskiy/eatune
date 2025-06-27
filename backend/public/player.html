@@ -83,31 +83,33 @@
       const queueList = document.getElementById('queueList');
 
       let currentTrackId = null;
-      let currentTrackUrl = null;
       let isAudioUnlocked = false;
 
-      async function reportProgress() {
-        if (audioPlayer.paused || !currentTrackId) return;
-        try {
-          await fetch('/progress', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ currentTime: audioPlayer.currentTime })
-          });
-        } catch (e) { }
-      }
+      // --- ИЗМЕНЕННЫЕ ФУНКЦИИ ---
 
+      // Запрашивает текущий трек с правильного эндпоинта
       async function pollForTrack() {
         try {
-          const res = await fetch('/playlist/current');
-          const data = await res.json();
-          if (!data) return;
+          // ИЗМЕНЕНО: '/playlist/current' -> '/track'
+          const res = await fetch('/track'); 
+          // Проверяем, что ответ не пустой
+          const text = await res.text();
+          if (!text) {
+             console.log("No current track, queue might be empty.");
+             updatePlayerUI(null); // Очищаем UI если ничего не играет
+             return;
+          }
+          const data = JSON.parse(text);
 
-          const isNewTrack = !currentTrackId || data.id !== currentTrackId || data.trackUrl !== currentTrackUrl;
+          if (!data || !data.id) {
+             updatePlayerUI(null);
+             return;
+          }
 
-          if (isNewTrack) {
+          // Если пришел новый трек, обновляем плеер
+          if (currentTrackId !== data.id) {
+            console.log("New track received:", data.title);
             currentTrackId = data.id;
-            currentTrackUrl = data.trackUrl;
             updatePlayerUI(data);
           }
         } catch (err) {
@@ -115,24 +117,65 @@
         }
       }
 
+      // Запрашивает очередь с правильного эндпоинта
       async function pollForQueue() {
         try {
-          const res = await fetch('/playlist/queue');
+          // ИЗМЕНЕНО: '/playlist/queue' -> '/queue'
+          const res = await fetch('/queue');
           const queue = await res.json();
-          updateQueueUI(queue);
-        } catch (err) { }
-      }
-
-      function updatePlayerUI(track) {
-        trackTitle.textContent = track.title || 'Без названия';
-        trackArtist.textContent = track.artist || 'Неизвестный исполнитель';
-        coverArt.src = track.coverUrl || `https://placehold.co/400x400/1F2937/FFFFFF?text=${track.title.charAt(0)}`;
-        audioPlayer.src = track.trackUrl;
-        if (isAudioUnlocked) {
-          audioPlayer.play().catch(() => { });
+          // Отображаем только треки, которые идут *после* текущего
+          updateQueueUI(queue.slice(1));
+        } catch (err) {
+          console.error("pollForQueue error:", err);
         }
       }
 
+      // Переход к следующему треку
+      async function nextTrack() {
+          console.log("Track ended or skipped. Requesting next track.");
+          audioPlayer.pause();
+          currentTrackId = null;
+          try {
+              // ИЗМЕНЕНО: Используем эндпоинт /track/next для сдвига очереди на сервере
+              const response = await fetch('/track/next', { method: 'POST' });
+              const result = await response.json();
+              if (result.success) {
+                  console.log("Server confirmed next track. Polling for it.");
+                  // Сразу же запрашиваем новый трек, не дожидаясь таймера
+                  pollForTrack();
+                  pollForQueue();
+              }
+          } catch(e) {
+              console.error("Failed to move to next track:", e);
+          }
+      }
+
+      // --- КОНЕЦ ИЗМЕНЕНИЙ ---
+
+      // Обновляет UI плеера
+      function updatePlayerUI(track) {
+        if (track && track.id) {
+            trackTitle.textContent = track.title || 'Без названия';
+            trackArtist.textContent = track.artist || 'Неизвестный исполнитель';
+            coverArt.src = track.coverUrl || `https://placehold.co/400x400/1F2937/FFFFFF?text=${encodeURIComponent(track.title.charAt(0))}`;
+            coverArt.onerror = () => { coverArt.src = 'https://placehold.co/400x400/1F2937/FFFFFF?text=Error'; };
+            // Важно: устанавливаем источник звука только если он изменился
+            if(audioPlayer.src !== track.trackUrl) {
+                audioPlayer.src = track.trackUrl;
+            }
+            if (isAudioUnlocked && audioPlayer.paused) {
+                audioPlayer.play().catch(e => console.error("Play failed:", e));
+            }
+        } else {
+            trackTitle.textContent = 'Ожидание трека...';
+            trackArtist.textContent = 'Выберите песню в приложении';
+            coverArt.src = 'https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune';
+            audioPlayer.src = '';
+            updateProgress();
+        }
+      }
+
+      // Обновляет UI списка очереди
       function updateQueueUI(queue) {
         if (Array.isArray(queue) && queue.length > 0) {
           queueContainer.classList.remove('hidden');
@@ -148,16 +191,25 @@
         }
       }
 
+      // Обработчик кнопки активации плеера
       unlockAudioBtn.addEventListener('click', () => {
         isAudioUnlocked = true;
+        // Тестовый звук для разблокировки аудио в браузере
+        audioPlayer.play().then(() => audioPlayer.pause()).catch(() => {});
+
         unlockAudioBtn.classList.add('hidden');
         playerContainer.classList.remove('hidden');
-        setInterval(reportProgress, 2000);
-        setInterval(pollForTrack, 4000);
+        
+        // Запускаем периодические опросы сервера
+        setInterval(pollForTrack, 3000); // Чаще проверяем текущий трек
         setInterval(pollForQueue, 5000);
+        
+        // Первичный запуск
         pollForTrack();
         pollForQueue();
       });
+
+      // --- УПРАВЛЕНИЕ ВОСПРОИЗВЕДЕНИЕМ ---
 
       playPauseBtn.addEventListener('click', () =>
         audioPlayer.paused ? audioPlayer.play() : audioPlayer.pause()
@@ -173,20 +225,30 @@
         pauseIcon.classList.add('hidden');
       };
 
-      audioPlayer.addEventListener('ended', () => {
-        console.log('[AUDIO ENDED] Форсим переход к следующему треку');
-        fetch('/progress', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ currentTime: 999 }) // форсим конец
-        }).then(() => {
-          setTimeout(() => {
-            pollForTrack();
-            pollForQueue();
-          }, 500);
-        });
-      });
+      // Когда трек закончился, вызываем функцию перехода к следующему
+      audioPlayer.addEventListener('ended', nextTrack);
 
+      // --- ИНДИКАТОР ВЫПОЛНЕНИЯ ---
+
+      // Обновление прогресс-бара
+      function updateProgress() {
+          const duration = audioPlayer.duration;
+          const currentTime = audioPlayer.currentTime;
+
+          if (isNaN(duration)) {
+              progressBar.style.width = '0%';
+              currentTimeEl.textContent = '0:00';
+              totalDurationEl.textContent = '0:00';
+              return;
+          }
+          
+          const progressPercent = (currentTime / duration) * 100;
+          progressBar.style.width = `${progressPercent}%`;
+          currentTimeEl.textContent = formatTime(currentTime);
+          totalDurationEl.textContent = formatTime(duration);
+      }
+      
+      // Перемотка по клику на прогресс-бар
       progressBarContainer.addEventListener('click', (e) => {
         const { duration } = audioPlayer;
         if (duration) {
@@ -196,8 +258,16 @@
         }
       });
 
+      audioPlayer.addEventListener('timeupdate', updateProgress);
+      audioPlayer.addEventListener('loadedmetadata', updateProgress);
+
+
+      // Форматирование времени из секунд в "ММ:СС"
       function formatTime(s) {
-        return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+        if (isNaN(s)) return '0:00';
+        const minutes = Math.floor(s / 60);
+        const seconds = Math.floor(s % 60).toString().padStart(2, '0');
+        return `${minutes}:${seconds}`;
       }
     });
   </script>
