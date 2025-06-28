@@ -10,6 +10,18 @@ class Track {
   final String? coverUrl;
   final double? currentTime;
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'artist': artist,
+      'duration': duration,
+      'trackUrl': trackUrl,
+      'coverUrl': coverUrl,
+      'currentTime': currentTime,
+    };
+  }
+
   Track({
     required this.id,
     required this.title,

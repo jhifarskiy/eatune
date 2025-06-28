@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'api.dart'; // Наша модель Track и ApiService
+import 'api.dart';
 
 class QueuePage extends StatefulWidget {
   const QueuePage({super.key});
@@ -18,15 +18,14 @@ class _QueuePageState extends State<QueuePage> {
   void initState() {
     super.initState();
     _fetchQueue();
-    // Запускаем таймер для автоматического обновления очереди каждые 5 секунд
     _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      _fetchQueue(isSilent: true); // Последующие обновления "тихие"
+      _fetchQueue(isSilent: true);
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel(); // Важно отменить таймер, чтобы избежать утечек памяти
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -55,60 +54,29 @@ class _QueuePageState extends State<QueuePage> {
     final nowPlaying = _queue.isNotEmpty ? _queue.first : null;
     final upNext = _queue.length > 1 ? _queue.sublist(1) : [];
 
-    // ИСПРАВЛЕНО: Теперь основной Scaffold имеет градиент, а AppBar прозрачный
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF010A15), Color(0xFF0D325F)],
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: false,
-          titleSpacing: 4, // Чуть ближе к кнопке
-          title: const Text(
-            'Очередь',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-              fontSize: 24,
-            ),
-          ),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-        body: RefreshIndicator(
-          onRefresh: _fetchQueue,
-          backgroundColor: const Color(0xFF1CA4FF),
-          color: Colors.white,
-          child: _isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                )
-              : ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  children: [
-                    if (nowPlaying != null) _buildSectionTitle('Сейчас играет'),
-                    if (nowPlaying != null) _buildNowPlayingCard(nowPlaying),
-                    if (nowPlaying == null && !_isLoading) _buildEmptyState(),
+    // ИЗМЕНЕНО: Scaffold и AppBar удалены. Виджет теперь просто контент.
+    return RefreshIndicator(
+      onRefresh: _fetchQueue,
+      backgroundColor: const Color(0xFF1CA4FF),
+      color: Colors.white,
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : ListView(
+              // Добавляем отступы, чтобы соответствовать другим экранам
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 85),
+              children: [
+                if (nowPlaying != null) _buildSectionTitle('Сейчас играет'),
+                if (nowPlaying != null) _buildNowPlayingCard(nowPlaying),
+                if (nowPlaying == null && !_isLoading) _buildEmptyState(),
 
-                    if (upNext.isNotEmpty) const SizedBox(height: 24),
-                    if (upNext.isNotEmpty) _buildSectionTitle('Далее'),
-                    if (upNext.isNotEmpty)
-                      ...List.generate(upNext.length, (index) {
-                        return _buildQueueItem(upNext[index], index + 1);
-                      }),
-                  ],
-                ),
-        ),
-      ),
+                if (upNext.isNotEmpty) const SizedBox(height: 24),
+                if (upNext.isNotEmpty) _buildSectionTitle('Далее'),
+                if (upNext.isNotEmpty)
+                  ...List.generate(upNext.length, (index) {
+                    return _buildQueueItem(upNext[index], index + 1);
+                  }),
+              ],
+            ),
     );
   }
 
@@ -129,16 +97,14 @@ class _QueuePageState extends State<QueuePage> {
 
   Widget _buildNowPlayingCard(Track track) {
     return Card(
-      // ИСПРАВЛЕНО: Более живой цвет
       color: const Color(0xFF173D7A),
       elevation: 0,
-      // ИСПРАВЛЕНО: Более круглые углы
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Row(
           children: [
-            _buildCoverImage(track.coverUrl, 64, 16), // Углы 16
+            _buildCoverImage(track.coverUrl, 64, 16),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -182,7 +148,7 @@ class _QueuePageState extends State<QueuePage> {
             ),
           ),
           const SizedBox(width: 16),
-          _buildCoverImage(track.coverUrl, 48, 12), // Углы 12
+          _buildCoverImage(track.coverUrl, 48, 12),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -210,16 +176,13 @@ class _QueuePageState extends State<QueuePage> {
 
   Widget _buildCoverImage(String? coverUrl, double size, double borderRadius) {
     return ClipRRect(
-      // ИСПРАВЛЕНО: Более круглые углы для обложки
       borderRadius: BorderRadius.circular(borderRadius),
       child: Image.network(
-        coverUrl ??
-            'invalid_url', // Передаем заведомо неверный URL, чтобы вызвать errorBuilder
+        coverUrl ?? 'invalid_url',
         width: size,
         height: size,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
-          // ИСПРАВЛЕНО: Красивая заглушка вместо ошибки
           return Container(
             width: size,
             height: size,

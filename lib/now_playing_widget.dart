@@ -20,8 +20,10 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
   @override
   void initState() {
     super.initState();
+    // При первом запуске сразу получаем трек
     fetchCurrentTrack();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    // Устанавливаем таймер для периодического опроса сервера
+    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       fetchCurrentTrack();
     });
   }
@@ -38,14 +40,35 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
       final track = await ApiService.getCurrentTrack();
       if (!mounted) return;
 
+      // --- ОСНОВНЫЕ ИЗМЕНЕНИЯ ЗДЕСЬ ---
+
+      // 1. Если пришел НОВЫЙ трек (или трек появился после пустоты)
       if (track?.id != _currentTrack?.id) {
         setState(() {
           _currentTrack = track;
+          // Сбрасываем прогресс для нового трека
           _resetProgress();
           if (track != null) {
             _trackDuration = _parseDuration(track.duration);
+            // Устанавливаем начальное время, полученное с сервера
+            _updatePosition(track.currentTime);
+            // Запускаем локальный таймер для плавной анимации
             _startProgressTimer();
           }
+        });
+      }
+      // 2. Если трек ТОТ ЖЕ, просто синхронизируем время
+      else if (track != null) {
+        setState(() {
+          // Корректируем текущую позицию по данным с сервера
+          _updatePosition(track.currentTime);
+        });
+      }
+      // 3. Если треков больше нет (очередь закончилась)
+      else if (track == null && _currentTrack != null) {
+        setState(() {
+          _currentTrack = null;
+          _resetProgress();
         });
       }
     } catch (e) {
@@ -53,22 +76,44 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
     }
   }
 
+  // [НОВЫЙ МЕТОД] Обновляет позицию и прогресс-бар
+  void _updatePosition(double? serverTime) {
+    // Устанавливаем время с сервера (если оно есть)
+    _currentPosition = Duration(seconds: serverTime?.toInt() ?? 0);
+    // Пересчитываем процент для полосы прогресса
+    if (_trackDuration.inSeconds > 0) {
+      _currentProgress = _currentPosition.inSeconds / _trackDuration.inSeconds;
+    } else {
+      _currentProgress = 0.0;
+    }
+    // Убеждаемся, что прогресс не выходит за пределы 100%
+    _currentProgress = _currentProgress.clamp(0.0, 1.0);
+  }
+
+  // Локальный таймер для плавной анимации между запросами к серверу
   void _startProgressTimer() {
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_currentPosition < _trackDuration) {
         setState(() {
+          // Просто добавляем 1 секунду к текущей позиции
           _currentPosition += const Duration(seconds: 1);
-          _currentProgress = _trackDuration.inSeconds > 0
-              ? _currentPosition.inSeconds / _trackDuration.inSeconds
-              : 0.0;
+          // И пересчитываем прогресс
+          if (_trackDuration.inSeconds > 0) {
+            _currentProgress =
+                _currentPosition.inSeconds / _trackDuration.inSeconds;
+            _currentProgress = _currentProgress.clamp(0.0, 1.0);
+          }
         });
       } else {
+        // Если таймер дошел до конца, он остановится.
+        // Следующий опрос fetchCurrentTrack() получит уже новый трек.
         timer.cancel();
       }
     });
   }
 
+  // Сбрасывает таймеры и значения
   void _resetProgress() {
     _progressTimer?.cancel();
     setState(() {
@@ -77,6 +122,8 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
       _trackDuration = Duration.zero;
     });
   }
+
+  // --- Вспомогательные функции (без изменений) ---
 
   Duration _parseDuration(String? d) {
     if (d == null) return Duration.zero;
@@ -91,6 +138,7 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
   }
 
   String _formatDuration(Duration d) {
+    if (d.isNegative) return "0:00";
     final minutes = d.inMinutes.remainder(60);
     final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
@@ -101,7 +149,6 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Заголовок
         Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
           child: Text(
@@ -116,7 +163,6 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
         ),
         Row(
           children: [
-            // Обложка
             Container(
               width: 72,
               height: 72,
@@ -143,7 +189,6 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
               ),
             ),
             const SizedBox(width: 20),
-            // Название и артист
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,11 +224,24 @@ class NowPlayingWidgetState extends State<NowPlayingWidget> {
           children: [
             SizedBox(
               height: 3,
-              child: LinearProgressIndicator(
-                value: _currentProgress,
-                backgroundColor: Colors.white.withOpacity(0.2),
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                borderRadius: BorderRadius.circular(2),
+              // ИСПОЛЬЗУЕМ TweenAnimationBuilder для более плавной анимации прогресса
+              child: TweenAnimationBuilder<double>(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.linear,
+                tween: Tween<double>(
+                  begin: _currentProgress,
+                  end: _currentProgress,
+                ),
+                builder: (context, value, child) {
+                  return LinearProgressIndicator(
+                    value: value,
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      Colors.white,
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 6),

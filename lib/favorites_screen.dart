@@ -1,7 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'api.dart';
-import 'managers/favorites_manager.dart'; // <-- НОВЫЙ ИМПОРТ
+import 'api.dart'; // Нужен для Track и ApiService
+import 'managers/favorites_manager.dart'; // Наш менеджер
+
+// Копируем сюда те же виджеты для подтверждения, что и в track_list_widget
+// В идеале их стоило бы вынести в отдельный общий файл, но для простоты пока так.
 
 // Функция для отображения кастомного SnackBar
 void _showCustomSnackBar(BuildContext context, String message) {
@@ -29,29 +32,8 @@ void _showCustomSnackBar(BuildContext context, String message) {
   );
 }
 
-class TrackListWidget extends StatefulWidget {
-  final Function onTrackSelected;
-
-  const TrackListWidget({super.key, required this.onTrackSelected});
-
-  @override
-  State<TrackListWidget> createState() => _TrackListWidgetState();
-}
-
-class _TrackListWidgetState extends State<TrackListWidget> {
-  late Future<List<Track>> futureTracks;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTracks();
-  }
-
-  void _loadTracks() {
-    setState(() {
-      futureTracks = ApiService.getAllTracks();
-    });
-  }
+class FavoritesScreen extends StatelessWidget {
+  const FavoritesScreen({super.key});
 
   void _showConfirmationModal(BuildContext context, Track track) {
     showGeneralDialog(
@@ -64,7 +46,7 @@ class _TrackListWidgetState extends State<TrackListWidget> {
         return _TrackConfirmationDialog(
           track: track,
           onConfirm: () {
-            _confirmTrackSelection(track.id);
+            _confirmTrackSelection(context, track.id);
             Navigator.of(context).pop();
           },
         );
@@ -84,154 +66,176 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     );
   }
 
-  void _confirmTrackSelection(String id) async {
+  void _confirmTrackSelection(BuildContext context, String id) async {
     bool success = await ApiService.addToQueue(id);
-    if (!mounted) return;
-
-    if (success) {
-      _showCustomSnackBar(context, 'Трек добавлен в очередь!');
-      widget.onTrackSelected();
-    } else {
-      _showCustomSnackBar(context, 'Не удалось добавить трек');
+    if (context.mounted) {
+      if (success) {
+        _showCustomSnackBar(context, 'Трек добавлен в очередь!');
+      } else {
+        _showCustomSnackBar(context, 'Не удалось добавить трек');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Track>>(
-      future: futureTracks,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          );
-        }
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return Center(
-            child: Text(
-              'Нет доступных треков',
-              style: TextStyle(color: Colors.white.withOpacity(0.5)),
-            ),
-          );
-        }
-
-        final tracks = snapshot.data!;
-        return ListView.builder(
-          padding: EdgeInsets.zero,
-          itemCount: tracks.length,
-          itemBuilder: (context, index) {
-            final track = tracks[index];
-            // Используем ValueListenableBuilder, чтобы перестраивать только иконку
-            return ValueListenableBuilder<List<Track>>(
-              valueListenable: FavoritesManager.notifier,
-              builder: (context, favoriteTracks, _) {
-                final isFavorite = FavoritesManager.isFavorite(track.id);
-
-                return _AnimatedTrackItem(
-                  onTap: () => _showConfirmationModal(context, track),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Row(
+    return ValueListenableBuilder<List<Track>>(
+      valueListenable: FavoritesManager.notifier,
+      builder: (context, favoriteTracks, _) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'FAVORITE LIST',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              if (favoriteTracks.isEmpty)
+                // Виджет-заглушка, если список пуст
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            track.coverUrl ??
-                                'https://placehold.co/100x100/374151/FFFFFF?text=?',
-                            width: 50,
-                            height: 50,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                                  width: 50,
-                                  height: 50,
-                                  color: const Color(0xFF374151),
-                                  child: const Icon(
-                                    Icons.music_note,
-                                    color: Colors.grey,
-                                    size: 24,
-                                  ),
-                                ),
+                        Icon(
+                          Icons.favorite_border,
+                          color: Colors.white.withOpacity(0.3),
+                          size: 64,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Your favorite list is empty',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white.withOpacity(0.7),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        const SizedBox(height: 8),
+                        Text(
+                          'Add tracks to see them here',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                // Список избранных треков
+                Expanded(
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: favoriteTracks.length,
+                    itemBuilder: (context, index) {
+                      final track = favoriteTracks[index];
+                      // Мы можем переиспользовать тот же _AnimatedTrackItem
+                      return _AnimatedTrackItem(
+                        onTap: () => _showConfirmationModal(context, track),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Row(
                             children: [
-                              Text(
-                                track.title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  track.coverUrl ??
+                                      'https://placehold.co/100x100/374151/FFFFFF?text=?',
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Container(
+                                        width: 50,
+                                        height: 50,
+                                        color: const Color(0xFF374151),
+                                        child: const Icon(
+                                          Icons.music_note,
+                                          color: Colors.grey,
+                                          size: 24,
+                                        ),
+                                      ),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      track.title,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      track.artist,
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.5),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 16),
                               Text(
-                                track.artist,
+                                track.duration,
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.5),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w400,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(width: 8),
+                              // На экране избранного мы просто удаляем трек из списка
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.favorite,
+                                  color: Colors.redAccent,
+                                ),
+                                onPressed: () {
+                                  FavoritesManager.removeFavorite(track.id);
+                                  _showCustomSnackBar(
+                                    context,
+                                    'Удалено из избранного',
+                                  );
+                                },
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Text(
-                          track.duration,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // ИЗМЕНЕНО: Иконка трех точек заменена на сердечко
-                        IconButton(
-                          icon: Icon(
-                            isFavorite ? Icons.favorite : Icons.favorite_border,
-                            color: isFavorite
-                                ? Colors.redAccent
-                                : Colors.white.withOpacity(0.5),
-                          ),
-                          onPressed: () {
-                            // Логика добавления/удаления
-                            FavoritesManager.toggleFavorite(track);
-                            // Показываем уведомление
-                            if (isFavorite) {
-                              _showCustomSnackBar(
-                                context,
-                                'Удалено из избранного',
-                              );
-                            } else {
-                              _showCustomSnackBar(
-                                context,
-                                'Добавлено в избранное',
-                              );
-                            }
-                          },
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            );
-          },
+                ),
+              const SizedBox(height: 85),
+            ],
+          ),
         );
       },
     );
   }
 }
 
-// ... Остальные виджеты (_AnimatedTrackItem, _TrackConfirmationDialog, _ConfirmAddButton) остаются без изменений
+// ... Виджеты-хелперы, скопированные из track_list_widget ...
+
 class _AnimatedTrackItem extends StatefulWidget {
   final VoidCallback onTap;
   final Widget child;
@@ -285,7 +289,7 @@ class _TrackConfirmationDialog extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: const Color(0xFF1A3A6D).withOpacity(0.9),
-            borderRadius: BorderRadius.circular(50.0), // <- Углы уже скруглены
+            borderRadius: BorderRadius.circular(50.0),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -366,9 +370,7 @@ class __ConfirmAddButtonState extends State<_ConfirmAddButton> {
 
   void _handleAdd() {
     if (_isAdding || _isAdded) return;
-
     setState(() => _isAdding = true);
-
     Future.delayed(const Duration(milliseconds: 1200), () {
       if (mounted) {
         setState(() {
@@ -399,9 +401,9 @@ class __ConfirmAddButtonState extends State<_ConfirmAddButton> {
         child: Center(
           child: _isAdded
               ? const Icon(Icons.check, color: Color(0xFF1CA4FF))
-              : Text(
+              : const Text(
                   'Добавить',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

@@ -1,10 +1,10 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'now_playing_widget.dart';
-import 'tab_selector_widget.dart';
 import 'track_list_widget.dart';
 import 'queue_page.dart';
+import 'widgets/horizontal_tracks_widget.dart';
+import 'favorites_screen.dart';
+import 'widgets/search_overlay.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,14 +13,80 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage>
-    with SingleTickerProviderStateMixin {
-  final GlobalKey<NowPlayingWidgetState> _nowPlayingKey =
-      GlobalKey<NowPlayingWidgetState>();
+class HomeContent extends StatelessWidget {
+  const HomeContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              const HorizontalTracksWidget(),
+              const SizedBox(height: 32),
+              const Text(
+                'ALL TRACKS',
+                style: TextStyle(
+                  // Цвет стал ярче
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: TrackListWidget(onTrackSelected: () {}),
+          ),
+        ),
+        const SizedBox(height: 85),
+      ],
+    );
+  }
+}
+
+class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
 
-  void _onTrackSelected() {
-    _nowPlayingKey.currentState?.fetchCurrentTrack();
+  final List<Widget> _screens = [
+    const HomeContent(),
+    const QueuePage(),
+    const FavoritesScreen(),
+  ];
+
+  void _showSearchOverlay() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (context, _, __) => const SearchOverlay(),
+        transitionsBuilder: (context, animation, _, child) {
+          return SlideTransition(
+            position:
+                Tween<Offset>(
+                  begin: const Offset(0, -1),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutQuart,
+                  ),
+                ),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
   }
 
   @override
@@ -37,12 +103,11 @@ class _HomePageState extends State<HomePage>
         ),
         child: SafeArea(
           bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: SizedBox(
                   height: 90,
                   child: Stack(
                     alignment: Alignment.center,
@@ -51,11 +116,11 @@ class _HomePageState extends State<HomePage>
                         alignment: Alignment.centerLeft,
                         child: IconButton(
                           icon: SvgPicture.asset(
-                            'assets/icons/menu.svg',
+                            'assets/icons/search.svg',
                             color: Colors.white,
                             width: 28,
                           ),
-                          onPressed: () {},
+                          onPressed: _showSearchOverlay,
                           splashColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                         ),
@@ -77,67 +142,75 @@ class _HomePageState extends State<HomePage>
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                NowPlayingWidget(key: _nowPlayingKey),
-                const SizedBox(height: 32),
-                const TabSelectorWidget(),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: TrackListWidget(onTrackSelected: _onTrackSelected),
+              ),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    key: ValueKey<int>(_currentIndex),
+                    child: _screens[_currentIndex],
+                  ),
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
+                        return FadeTransition(opacity: animation, child: child);
+                      },
                 ),
-                const SizedBox(height: 85),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
-      bottomNavigationBar: Theme(
-        data: Theme.of(context).copyWith(
-          splashFactory: NoSplash.splashFactory,
-          highlightColor: Colors.transparent,
-        ),
+      bottomNavigationBar: BottomAppBar(
+        color: Colors.transparent,
+        elevation: 0,
+        padding: EdgeInsets.zero,
         child: SizedBox(
-          height: 80 + MediaQuery.of(context).padding.bottom,
+          height: 80,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final double width = constraints.maxWidth;
               final double itemWidth = width / 3;
+              final double bubbleWidth = 64;
+              final double bubbleHeight = 52;
               final double bubbleLeft =
-                  _currentIndex * itemWidth + (itemWidth - 64) / 2;
+                  _currentIndex * itemWidth + (itemWidth - bubbleWidth) / 2;
+              final double bubbleTop = (80 - bubbleHeight) / 2;
 
               return Stack(
                 children: [
-                  // Пузырек
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeInOut,
                     left: bubbleLeft,
-                    top: 10,
+                    top: bubbleTop,
                     child: Container(
-                      width: 64,
-                      height: 52,
+                      width: bubbleWidth,
+                      height: bubbleHeight,
                       decoration: BoxDecoration(
                         color: const Color(0xFF1CA4FF),
                         borderRadius: BorderRadius.circular(30),
                       ),
                     ),
                   ),
-
-                  // Иконки
-                  Positioned.fill(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        bottom: MediaQuery.of(context).padding.bottom,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Center(
+                          child: _buildNavItem(0, 'assets/icons/home.svg'),
+                        ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildNavItem(0, 'assets/icons/home.svg'),
-                          _buildNavItem(1, 'assets/icons/playlist.svg'),
-                          _buildNavItem(2, 'assets/icons/search.svg'),
-                        ],
+                      Expanded(
+                        child: Center(
+                          child: _buildNavItem(1, 'assets/icons/playlist.svg'),
+                        ),
                       ),
-                    ),
+                      Expanded(
+                        child: Center(
+                          child: _buildNavItem(2, 'assets/icons/heart.svg'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               );
@@ -151,139 +224,24 @@ class _HomePageState extends State<HomePage>
   Widget _buildNavItem(int index, String asset) {
     return GestureDetector(
       onTap: () {
-        if (index == 1) {
-          Navigator.of(context).push(_createSlideUpRoute());
-        } else {
-          setState(() {
-            _currentIndex = index;
-          });
-        }
+        setState(() {
+          _currentIndex = index;
+        });
       },
       behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 72,
-        height: 64,
-        child: Center(
-          child: SizedBox(
+      child: Center(
+        child: SizedBox(
+          width: 30,
+          height: 30,
+          child: SvgPicture.asset(
+            asset,
             width: 30,
             height: 30,
-            child: SvgPicture.asset(
-              asset,
-              width: 30,
-              height: 30,
-              color: Colors.white,
-              fit: BoxFit.contain,
-            ),
+            color: Colors.white,
+            fit: BoxFit.contain,
           ),
         ),
       ),
     );
   }
-}
-
-Route _createSlideUpRoute() {
-  return PageRouteBuilder(
-    opaque: false,
-    pageBuilder: (context, animation, secondaryAnimation) => const QueuePage(),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      const begin = Offset(0.0, 1.0);
-      const end = Offset.zero;
-      const curve = Curves.easeOutQuart;
-      final tween = Tween(
-        begin: begin,
-        end: end,
-      ).chain(CurveTween(curve: curve));
-      final offsetAnimation = animation.drive(tween);
-
-      return SlideTransition(
-        position: offsetAnimation,
-        child: FadeTransition(opacity: animation, child: child),
-      );
-    },
-    transitionDuration: const Duration(milliseconds: 400),
-  );
-}
-
-void showOrderModal(BuildContext context) {
-  showGeneralDialog(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: 'Заказ',
-    barrierColor: Colors.black.withOpacity(0.5),
-    transitionDuration: const Duration(milliseconds: 350),
-    pageBuilder: (_, __, ___) => const SizedBox.shrink(),
-    transitionBuilder: (_, animation, __, child) {
-      final scaleAnimation = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutQuart,
-        reverseCurve: Curves.easeOutCubic,
-      );
-
-      return ScaleTransition(
-        scale: scaleAnimation,
-        child: FadeTransition(
-          opacity: animation,
-          child: Dialog(
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A3A6D),
-                    borderRadius: BorderRadius.circular(50.0),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Заказ принят!',
-                        style: TextStyle(
-                          fontFamily: 'Montserrat',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 20,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Мы поставим вашу песню,\nкак только освободится очередь.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w400,
-                          fontSize: 15,
-                          color: Colors.white70,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.close,
-                        color: Colors.white54,
-                        size: 22,
-                      ),
-                      onPressed: () => Navigator.of(context).pop(),
-                      splashRadius: 20,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    },
-  );
 }
