@@ -1,10 +1,12 @@
+// lib/home_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'track_list_widget.dart';
 import 'queue_page.dart';
 import 'widgets/horizontal_tracks_widget.dart';
 import 'favorites_screen.dart';
-import 'widgets/search_overlay.dart';
+import 'search_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -25,21 +27,20 @@ class HomeContent extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 24),
-              const HorizontalTracksWidget(),
-              const SizedBox(height: 32),
-              const Text(
+            children: const [
+              SizedBox(height: 24),
+              HorizontalTracksWidget(),
+              SizedBox(height: 32),
+              Text(
                 'ALL TRACKS',
                 style: TextStyle(
-                  // Цвет стал ярче
                   color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 1.5,
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
             ],
           ),
         ),
@@ -64,27 +65,21 @@ class _HomePageState extends State<HomePage> {
     const FavoritesScreen(),
   ];
 
-  void _showSearchOverlay() {
-    Navigator.of(context).push(
+  void _openSearchPage() {
+    Navigator.push(
+      context,
       PageRouteBuilder(
-        opaque: false,
-        pageBuilder: (context, _, __) => const SearchOverlay(),
-        transitionsBuilder: (context, animation, _, child) {
-          return SlideTransition(
-            position:
-                Tween<Offset>(
-                  begin: const Offset(0, -1),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutQuart,
-                  ),
-                ),
-            child: child,
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const SearchPage(),
+        transitionDuration: const Duration(milliseconds: 300),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curvedAnimation = CurvedAnimation(
+            parent: animation,
+            curve: Curves.linear,
           );
+
+          return FadeTransition(opacity: curvedAnimation, child: child);
         },
-        transitionDuration: const Duration(milliseconds: 400),
       ),
     );
   }
@@ -120,7 +115,7 @@ class _HomePageState extends State<HomePage> {
                             color: Colors.white,
                             width: 28,
                           ),
-                          onPressed: _showSearchOverlay,
+                          onPressed: _openSearchPage,
                           splashColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                         ),
@@ -192,25 +187,31 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Center(
-                          child: _buildNavItem(0, 'assets/icons/home.svg'),
+                  // Возвращаемся к этому варианту, так как он самый логичный
+                  SizedBox.expand(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: _buildNavItem(0, 'assets/icons/home.svg'),
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: _buildNavItem(1, 'assets/icons/playlist.svg'),
+                        Expanded(
+                          child: Center(
+                            child: _buildNavItem(
+                              1,
+                              'assets/icons/playlist.svg',
+                            ),
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: _buildNavItem(2, 'assets/icons/heart.svg'),
+                        Expanded(
+                          child: Center(
+                            child: _buildNavItem(2, 'assets/icons/heart.svg'),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               );
@@ -221,6 +222,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Возвращаем SVG иконки
   Widget _buildNavItem(int index, String asset) {
     return GestureDetector(
       onTap: () {

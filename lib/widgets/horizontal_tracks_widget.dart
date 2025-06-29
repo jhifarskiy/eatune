@@ -1,6 +1,6 @@
 import 'dart:ui';
-import 'package:eatune/managers/favorites_manager.dart';
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import '../api.dart';
 
 // --- Функции-хелперы ---
@@ -79,6 +79,47 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
     }
   }
 
+  Widget _buildPlaceholder() {
+    return Container(
+      width: 130,
+      margin: const EdgeInsets.only(right: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 120,
+            width: 120,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              // ИЗМЕНЕНИЕ: Углы обложки снова менее круглые
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: 14,
+            width: 100,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              // ИЗМЕНЕНИЕ: Углы текста более круглые
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+          ),
+          const SizedBox(height: 5),
+          Container(
+            height: 12,
+            width: 60,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              // ИЗМЕНЕНИЕ: Углы текста более круглые
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -87,7 +128,6 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
         const Text(
           'POPULAR',
           style: TextStyle(
-            // ИЗМЕНЕНО: Цвет стал ярче
             color: Colors.white,
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -100,85 +140,101 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
           child: FutureBuilder<List<Track>>(
             future: _tracksFuture,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                );
-              }
-              if (snapshot.hasError ||
-                  !snapshot.hasData ||
-                  snapshot.data!.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'Popular tracks not available.',
-                    style: TextStyle(color: Colors.white54),
-                  ),
-                );
-              }
-
-              final tracks = snapshot.data!;
-              return ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: tracks.length > 10 ? 10 : tracks.length,
-                itemBuilder: (context, index) {
-                  final track = tracks[index];
-                  return GestureDetector(
-                    onTap: () => _showConfirmationModal(track),
-                    child: Container(
-                      width: 130,
-                      margin: const EdgeInsets.only(right: 20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16.0),
-                            child: Image.network(
-                              track.coverUrl ?? '',
-                              height: 120,
-                              width: 120,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                    height: 120,
-                                    width: 120,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF374151),
-                                      borderRadius: BorderRadius.circular(16.0),
-                                    ),
-                                    child: const Icon(
-                                      Icons.music_note,
-                                      color: Colors.grey,
-                                      size: 40,
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                child: (snapshot.connectionState == ConnectionState.waiting)
+                    ? Shimmer.fromColors(
+                        key: const ValueKey('shimmer_horizontal'),
+                        baseColor: Colors.grey[850]!,
+                        highlightColor: Colors.grey[800]!,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: 5,
+                          itemBuilder: (context, index) => _buildPlaceholder(),
+                        ),
+                      )
+                    : (snapshot.hasError ||
+                          !snapshot.hasData ||
+                          snapshot.data!.isEmpty)
+                    ? const Center(
+                        key: ValueKey('error_horizontal'),
+                        child: Text(
+                          'Popular tracks not available.',
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                      )
+                    : ListView.builder(
+                        key: const ValueKey('data_horizontal'),
+                        scrollDirection: Axis.horizontal,
+                        itemCount: snapshot.data!.length > 10
+                            ? 10
+                            : snapshot.data!.length,
+                        itemBuilder: (context, index) {
+                          final track = snapshot.data![index];
+                          return GestureDetector(
+                            onTap: () => _showConfirmationModal(track),
+                            child: Container(
+                              width: 130,
+                              margin: const EdgeInsets.only(right: 20.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ClipRRect(
+                                    // ИЗМЕНЕНИЕ: Углы обложки снова менее круглые
+                                    borderRadius: BorderRadius.circular(16.0),
+                                    child: Image.network(
+                                      track.coverUrl ?? '',
+                                      height: 120,
+                                      width: 120,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (
+                                            context,
+                                            error,
+                                            stackTrace,
+                                          ) => Container(
+                                            height: 120,
+                                            width: 120,
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF374151),
+                                              borderRadius:
+                                                  BorderRadius.circular(16.0),
+                                            ),
+                                            child: const Icon(
+                                              Icons.music_note,
+                                              color: Colors.grey,
+                                              size: 40,
+                                            ),
+                                          ),
                                     ),
                                   ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    track.title,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    track.artist,
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.6),
+                                      fontSize: 12,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            track.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            track.artist,
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                    ),
-                  );
-                },
               );
             },
           ),
@@ -188,7 +244,6 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
   }
 }
 
-// --- Вспомогательные виджеты ---
 class _TrackConfirmationDialog extends StatelessWidget {
   final Track track;
   final VoidCallback onConfirm;
