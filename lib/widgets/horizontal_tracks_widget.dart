@@ -5,7 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../api.dart';
 
-// --- Функции-хелперы ---
+class NoGlowScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 void _showCustomSnackBar(BuildContext context, String message) {
   ScaffoldMessenger.of(context).hideCurrentSnackBar();
   ScaffoldMessenger.of(context).showSnackBar(
@@ -71,6 +81,7 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
     );
   }
 
+  // ИЗМЕНЕНИЕ: Логика обработки ответа от API
   void _confirmTrackSelection(String id) async {
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
@@ -92,12 +103,14 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
     if (response.success) {
       _showCustomSnackBar(context, response.message);
     } else {
+      // Проверяем, является ли ошибка ошибкой кулдауна
       if (response.message.startsWith('Вы сможете добавить трек')) {
         showDialog(
           context: context,
           builder: (context) => CooldownDialog(serverMessage: response.message),
         );
       } else {
+        // Показываем любую другую ошибку
         _showCustomSnackBar(context, response.message);
       }
     }
@@ -124,13 +137,17 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
             future: _tracksFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return Shimmer.fromColors(
-                  baseColor: Colors.grey[850]!,
-                  highlightColor: Colors.grey[800]!,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: 5,
-                    itemBuilder: (_, __) => const _HorizontalTrackPlaceholder(),
+                return ScrollConfiguration(
+                  behavior: NoGlowScrollBehavior(),
+                  child: Shimmer.fromColors(
+                    baseColor: Colors.grey[850]!,
+                    highlightColor: Colors.grey[800]!,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: 5,
+                      itemBuilder: (_, __) =>
+                          const _HorizontalTrackPlaceholder(),
+                    ),
                   ),
                 );
               }
@@ -146,16 +163,19 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
               }
 
               final tracks = snapshot.data!;
-              return ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: tracks.length > 10 ? 10 : tracks.length,
-                itemBuilder: (context, index) {
-                  final track = tracks[index];
-                  return _HorizontalTrackItem(
-                    track: track,
-                    onTap: () => _showConfirmationModal(track),
-                  );
-                },
+              return ScrollConfiguration(
+                behavior: NoGlowScrollBehavior(),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: tracks.length > 10 ? 10 : tracks.length,
+                  itemBuilder: (context, index) {
+                    final track = tracks[index];
+                    return _HorizontalTrackItem(
+                      track: track,
+                      onTap: () => _showConfirmationModal(track),
+                    );
+                  },
+                ),
               );
             },
           ),
@@ -231,32 +251,14 @@ class _HorizontalTrackItem extends StatelessWidget {
                 height: 120,
                 width: 120,
                 fit: BoxFit.cover,
-                frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                  if (wasSynchronouslyLoaded) {
-                    return child;
+                frameBuilder: (context, child, frame, wasLoaded) {
+                  if (frame == null) {
+                    return const _AnimatedCoverPlaceholder();
                   }
                   return AnimatedOpacity(
-                    opacity: frame == null ? 0 : 1,
+                    opacity: 1.0,
                     duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
                     child: child,
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) {
-                    return child;
-                  }
-                  return Shimmer.fromColors(
-                    baseColor: Colors.grey[850]!,
-                    highlightColor: Colors.grey[800]!,
-                    child: Container(
-                      height: 120,
-                      width: 120,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[850],
-                        borderRadius: BorderRadius.circular(16.0),
-                      ),
-                    ),
                   );
                 },
                 errorBuilder: (_, __, ___) => Container(
@@ -296,6 +298,43 @@ class _HorizontalTrackItem extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedCoverPlaceholder extends StatefulWidget {
+  const _AnimatedCoverPlaceholder();
+
+  @override
+  State<_AnimatedCoverPlaceholder> createState() =>
+      _AnimatedCoverPlaceholderState();
+}
+
+class _AnimatedCoverPlaceholderState extends State<_AnimatedCoverPlaceholder>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    duration: const Duration(milliseconds: 1200),
+    vsync: this,
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween(begin: 0.4, end: 0.8).animate(_controller),
+      child: Container(
+        height: 120,
+        width: 120,
+        decoration: BoxDecoration(
+          color: Colors.grey[800],
+          borderRadius: BorderRadius.circular(16.0),
         ),
       ),
     );

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 
+// Вспомогательный класс для отключения glow-эффекта
 class NoGlowScrollBehavior extends ScrollBehavior {
   @override
   Widget buildOverscrollIndicator(

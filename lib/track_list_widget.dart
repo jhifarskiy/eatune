@@ -108,7 +108,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
       trackId: id,
       venueId: venueId,
     );
-
     if (!mounted) return;
 
     if (response.success) {

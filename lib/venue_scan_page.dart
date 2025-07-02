@@ -24,7 +24,10 @@ class _VenueScanPageState extends State<VenueScanPage> {
   }
 
   void _onQrCodeDetected(BarcodeCapture capture) {
-    if (_isProcessing) return; // Предотвращаем повторную обработку
+    // ИЗМЕНЕНИЕ: Добавлен print для отладки
+    print("--- QR-КОД ОБНАРУЖЕН! ---");
+
+    if (_isProcessing) return;
     setState(() {
       _isProcessing = true;
     });
@@ -32,17 +35,15 @@ class _VenueScanPageState extends State<VenueScanPage> {
     final List<Barcode> barcodes = capture.barcodes;
     if (barcodes.isNotEmpty) {
       final String? rawValue = barcodes.first.rawValue;
+      print("Содержимое кода: $rawValue"); // Посмотрим, что внутри
+
       if (rawValue != null && rawValue.startsWith('eatune://venue/')) {
-        // Останавливаем камеру, чтобы не сканировать дальше
         _scannerController.stop();
 
-        // Извлекаем ID заведения из строки
         final venueId = rawValue.substring('eatune://venue/'.length);
 
-        // Показываем диалог подтверждения
         _showConfirmationDialog(venueId);
       } else {
-        // Если QR-код не нашего формата, возобновляем обработку
         setState(() {
           _isProcessing = false;
         });
@@ -53,7 +54,7 @@ class _VenueScanPageState extends State<VenueScanPage> {
   Future<void> _showConfirmationDialog(String venueId) async {
     return showDialog<void>(
       context: context,
-      barrierDismissible: false, // Пользователь должен сделать выбор
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF0D325F),
@@ -76,7 +77,6 @@ class _VenueScanPageState extends State<VenueScanPage> {
               ),
               onPressed: () {
                 Navigator.of(context).pop();
-                // Возобновляем сканирование
                 _scannerController.start();
                 setState(() {
                   _isProcessing = false;
@@ -94,7 +94,6 @@ class _VenueScanPageState extends State<VenueScanPage> {
               onPressed: () async {
                 await VenueSessionManager.saveSession(venueId);
                 if (mounted) {
-                  // Переходим на главный экран, удаляя все предыдущие экраны из стека
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(builder: (context) => const HomePage()),
                     (Route<dynamic> route) => false,
@@ -114,16 +113,11 @@ class _VenueScanPageState extends State<VenueScanPage> {
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // Слой 1: Камера
           MobileScanner(
             controller: _scannerController,
             onDetect: _onQrCodeDetected,
           ),
-
-          // Слой 2: Полупрозрачное затемнение поверх камеры
           Container(color: Colors.black.withOpacity(0.5)),
-
-          // Слой 3: Пользовательский интерфейс (лого, текст и рамка сканера)
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -148,7 +142,6 @@ class _VenueScanPageState extends State<VenueScanPage> {
                 ),
               ),
               const Spacer(flex: 1),
-              // Рамка для сканирования
               Container(
                 width: 250,
                 height: 250,

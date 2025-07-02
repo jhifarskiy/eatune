@@ -32,22 +32,20 @@ let backgroundPlaylist = []; // Глобальный плейлист из вс�
 // Функция для добавления трека из фонового плейлиста, если очередь пуста
 function ensureQueueHasTrack(venueId) {
     if (!venueQueues[venueId] || venueQueues[venueId].queue.length > 0) {
-        return; // Очередь не пуста, ничего не делаем
+        return; 
     }
     
     if (backgroundPlaylist.length === 0) {
         console.log(`Venue ${venueId}: Background playlist is empty, can't add a track.`);
-        return; // Фоновый плейлист пуст
+        return;
     }
 
     let afrerackIndex = venueQueues[venueId].backgroundTrackIndex || 0;
     
-    // Выбираем следующий трек и зацикливаем, если дошли до конца
     const nextTrack = backgroundPlaylist[afrerackIndex];
     afrerackIndex = (afrerackIndex + 1) % backgroundPlaylist.length;
     venueQueues[venueId].backgroundTrackIndex = afrerackIndex;
     
-    // Добавляем трек в очередь
     venueQueues[venueId].queue.push({ ...nextTrack, isBackgroundTrack: true });
     
     console.log(`Venue ${venueId}: Queue was empty. Added background track: ${nextTrack.title}`);
@@ -72,7 +70,6 @@ wss.on('connection', (ws, req) => {
     
     venueQueues[venueId].listeners.add(ws);
     
-    // Проверяем, нужно ли добавить трек при подключении
     ensureQueueHasTrack(venueId);
     broadcastQueueUpdate(venueId);
 
@@ -101,13 +98,10 @@ function broadcastQueueUpdate(venueId) {
 
 // --- Маршруты API (ОБНОВЛЕННЫЕ) ---
 
-// Отдает список всех доступных треков
 app.get('/tracks', (req, res) => {
-    // Просто отдаем загруженный в память плейлист
     res.json(backgroundPlaylist);
 });
 
-// Добавляет трек в очередь конкретного заведения
 app.post('/queue', async (req, res) => {
     const { id: trackId, venueId } = req.body;
     if (!trackId || !venueId) {
@@ -118,7 +112,6 @@ app.post('/queue', async (req, res) => {
         venueQueues[venueId] = { queue: [], listeners: new Set(), backgroundTrackIndex: 0, lastUserAddTimestamp: 0 };
     }
 
-    // --- ЛОГИКА ОГРАНИЧЕНИЯ ---
     const now = Date.now();
     const lastAdd = venueQueues[venueId].lastUserAddTimestamp || 0;
     const timeSinceLastAdd = now - lastAdd;
@@ -134,22 +127,16 @@ app.post('/queue', async (req, res) => {
     }
         
     const trackData = { ...selectedTrack, isBackgroundTrack: false, currentTime: 0, lastUpdate: now };
-
     const currentQueue = venueQueues[venueId].queue;
+
     if (currentQueue.find(t => t.id === trackData.id)) {
         return res.status(409).json({ error: "Этот трек уже в очереди" });
     }
     
-    // Если в очереди был фоновый трек, заменяем его. Если нет — добавляем в конец.
-    if (currentQueue.length > 0 && currentQueue[0].isBackgroundTrack) {
-        currentQueue.unshift(trackData); // Добавляем в начало
-        const removedBgTrack = currentQueue.splice(1, 1); // Удаляем фоновый трек, который был следующим
-        console.log(`Replaced background track with user track: ${removedBgTrack[0].title}`);
-    } else {
-        currentQueue.push(trackData);
-    }
+    // ИЗМЕНЕНИЕ: Убрана сложная логика. Любой новый трек всегда добавляется в конец.
+    currentQueue.push(trackData);
 
-    venueQueues[venueId].lastUserAddTimestamp = now; // Обновляем время последнего добавления
+    venueQueues[venueId].lastUserAddTimestamp = now;
     broadcastQueueUpdate(venueId);
 
     console.log(`Track "${trackData.title}" added to queue for venue ${venueId}.`);
@@ -157,7 +144,6 @@ app.post('/queue', async (req, res) => {
 });
 
 
-// Удаляет трек из очереди конкретного заведения
 app.post('/track/next', (req, res) => {
     const { venueId } = req.body;
     if (!venueId) return res.status(400).json({ error: 'venueId is required' });
@@ -167,13 +153,17 @@ app.post('/track/next', (req, res) => {
         const finishedTrack = venue.queue.shift();
         console.log(`Track "${finishedTrack.title}" finished for venue ${venueId}.`);
         
-        // После окончания трека, проверяем, не пуста ли очередь
         ensureQueueHasTrack(venueId);
         broadcastQueueUpdate(venueId);
         
         res.status(200).json({ success: true, nextTrack: venue.queue[0] || null });
     } else {
-        res.status(200).json({ success: true, nextTrack: null });
+        // Если по какой-то причине очередь оказалась пуста, все равно проверяем
+        if (venue) {
+             ensureQueueHasTrack(venueId);
+             broadcastQueueUpdate(venueId);
+        }
+        res.status(200).json({ success: true, nextTrack: venue?.queue[0] || null });
     }
 });
 
@@ -186,7 +176,6 @@ async function startServer() {
         const db = client.db(dbName);
         tracksCollection = db.collection(collectionName);
         
-        // Загружаем все треки в память при старте
         const tracksFromDb = await tracksCollection.find({}).toArray();
         backgroundPlaylist = tracksFromDb.map(track => ({
             id: track._id.toString(),
