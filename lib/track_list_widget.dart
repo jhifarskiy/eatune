@@ -1,10 +1,22 @@
 import 'dart:ui';
+import 'package:eatune/managers/venue_session_manager.dart';
+import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 import 'managers/favorites_manager.dart';
 
-// Функция для отображения кастомного SnackBar
+class NoGlowScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 void _showCustomSnackBar(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
@@ -81,18 +93,93 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   }
 
   void _confirmTrackSelection(String id) async {
-    bool success = await ApiService.addToQueue(id);
+    final venueId = await VenueSessionManager.getActiveVenueId();
+    if (venueId == null) {
+      if (mounted) {
+        _showCustomSnackBar(
+          context,
+          'Ошибка сессии. Отсканируйте QR-код заново.',
+        );
+      }
+      return;
+    }
+
+    final ApiResponse response = await ApiService.addToQueue(
+      trackId: id,
+      venueId: venueId,
+    );
+
     if (!mounted) return;
 
-    if (success) {
-      _showCustomSnackBar(context, 'Трек добавлен в очередь!');
+    if (response.success) {
+      _showCustomSnackBar(context, response.message);
       widget.onTrackSelected();
     } else {
-      _showCustomSnackBar(context, 'Не удалось добавить трек');
+      if (response.message.startsWith('Вы сможете добавить трек')) {
+        showDialog(
+          context: context,
+          builder: (context) => CooldownDialog(serverMessage: response.message),
+        );
+      } else {
+        _showCustomSnackBar(context, response.message);
+      }
     }
   }
 
-  Widget _buildPlaceholder() {
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Track>>(
+      future: futureTracks,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return ScrollConfiguration(
+            behavior: NoGlowScrollBehavior(),
+            child: Shimmer.fromColors(
+              baseColor: Colors.grey[850]!,
+              highlightColor: Colors.grey[800]!,
+              child: ListView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                itemCount: 10,
+                itemBuilder: (context, index) => const _TrackItemPlaceholder(),
+              ),
+            ),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(
+            child: Text(
+              'Нет доступных треков',
+              style: TextStyle(color: Colors.white.withOpacity(0.5)),
+            ),
+          );
+        }
+
+        final tracks = snapshot.data!;
+        return ScrollConfiguration(
+          behavior: NoGlowScrollBehavior(),
+          child: ListView.builder(
+            padding: EdgeInsets.zero,
+            itemCount: tracks.length,
+            itemBuilder: (context, index) {
+              final track = tracks[index];
+              return _TrackListItem(
+                track: track,
+                onTap: () => _showConfirmationModal(context, track),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TrackItemPlaceholder extends StatelessWidget {
+  const _TrackItemPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
@@ -102,7 +189,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
             height: 50,
             decoration: BoxDecoration(
               color: Colors.white,
-              // ИЗМЕНЕНИЕ: Углы обложки снова менее круглые
               borderRadius: BorderRadius.circular(8.0),
             ),
           ),
@@ -116,7 +202,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
                   height: 16,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    // ИЗМЕНЕНИЕ: Углы текста более круглые
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                 ),
@@ -126,7 +211,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
                   height: 14,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    // ИЗМЕНЕНИЕ: Углы текста более круглые
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                 ),
@@ -139,7 +223,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
             height: 14,
             decoration: BoxDecoration(
               color: Colors.white,
-              // ИЗМЕНЕНИЕ: Углы текста более круглые
               borderRadius: BorderRadius.circular(8.0),
             ),
           ),
@@ -156,152 +239,135 @@ class _TrackListWidgetState extends State<TrackListWidget> {
       ),
     );
   }
+}
+
+class _TrackListItem extends StatelessWidget {
+  final Track track;
+  final VoidCallback onTap;
+
+  const _TrackListItem({required this.track, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Track>>(
-      future: futureTracks,
-      builder: (context, snapshot) {
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 400),
-          child: (snapshot.connectionState == ConnectionState.waiting)
-              ? Shimmer.fromColors(
-                  key: const ValueKey('shimmer_vertical'),
-                  baseColor: Colors.grey[850]!,
-                  highlightColor: Colors.grey[800]!,
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: 10,
-                    itemBuilder: (context, index) => _buildPlaceholder(),
-                  ),
-                )
-              : (snapshot.hasError ||
-                    !snapshot.hasData ||
-                    snapshot.data!.isEmpty)
-              ? Center(
-                  key: const ValueKey('error_vertical'),
-                  child: Text(
-                    'Нет доступных треков',
-                    style: TextStyle(color: Colors.white.withOpacity(0.5)),
-                  ),
-                )
-              : ListView.builder(
-                  key: const ValueKey('data_vertical'),
-                  padding: EdgeInsets.zero,
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, index) {
-                    final track = snapshot.data![index];
-                    return ValueListenableBuilder<List<Track>>(
-                      valueListenable: FavoritesManager.notifier,
-                      builder: (context, favoriteTracks, _) {
-                        final isFavorite = FavoritesManager.isFavorite(
-                          track.id,
-                        );
+    return ValueListenableBuilder<List<Track>>(
+      valueListenable: FavoritesManager.notifier,
+      builder: (context, favoriteTracks, _) {
+        final isFavorite = FavoritesManager.isFavorite(track.id);
 
-                        return _AnimatedTrackItem(
-                          onTap: () => _showConfirmationModal(context, track),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0),
-                            child: Row(
-                              children: [
-                                ClipRRect(
-                                  // ИЗМЕНЕНИЕ: Углы обложки снова менее круглые
-                                  borderRadius: BorderRadius.circular(8.0),
-                                  child: Image.network(
-                                    track.coverUrl ?? '',
-                                    width: 50,
-                                    height: 50,
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Container(
-                                              width: 50,
-                                              height: 50,
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF374151),
-                                                borderRadius:
-                                                    BorderRadius.circular(8.0),
-                                              ),
-                                              child: const Icon(
-                                                Icons.music_note,
-                                                color: Colors.grey,
-                                                size: 24,
-                                              ),
-                                            ),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        track.title,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        track.artist,
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.5),
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w400,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Text(
-                                  track.duration,
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.5),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: Icon(
-                                    isFavorite
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    color: isFavorite
-                                        ? Colors.redAccent
-                                        : Colors.white.withOpacity(0.5),
-                                  ),
-                                  onPressed: () {
-                                    FavoritesManager.toggleFavorite(track);
-                                    if (isFavorite) {
-                                      _showCustomSnackBar(
-                                        context,
-                                        'Удалено из избранного',
-                                      );
-                                    } else {
-                                      _showCustomSnackBar(
-                                        context,
-                                        'Добавлено в избранное',
-                                      );
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
+        return _AnimatedTrackItem(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8.0),
+                  child: Image.network(
+                    track.coverUrl ?? '',
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    frameBuilder:
+                        (context, child, frame, wasSynchronouslyLoaded) {
+                          if (wasSynchronouslyLoaded) {
+                            return child;
+                          }
+                          return AnimatedOpacity(
+                            opacity: frame == null ? 0 : 1,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                            child: child,
+                          );
+                        },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) {
+                        return child;
+                      }
+                      return Shimmer.fromColors(
+                        baseColor: Colors.grey[850]!,
+                        highlightColor: Colors.grey[800]!,
+                        child: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[850],
+                            borderRadius: BorderRadius.circular(8.0),
                           ),
-                        );
-                      },
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, _, __) => Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF374151),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: const Icon(
+                        Icons.music_note,
+                        color: Colors.grey,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        track.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        track.artist,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  track.duration,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(
+                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                    color: isFavorite
+                        ? Colors.redAccent
+                        : Colors.white.withOpacity(0.5),
+                  ),
+                  onPressed: () {
+                    FavoritesManager.toggleFavorite(track);
+                    _showCustomSnackBar(
+                      context,
+                      isFavorite
+                          ? 'Удалено из избранного'
+                          : 'Добавлено в избранное',
                     );
                   },
                 ),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -315,10 +381,10 @@ class _AnimatedTrackItem extends StatefulWidget {
   const _AnimatedTrackItem({required this.onTap, required this.child});
 
   @override
-  __AnimatedTrackItemState createState() => __AnimatedTrackItemState();
+  State<_AnimatedTrackItem> createState() => _AnimatedTrackItemState();
 }
 
-class __AnimatedTrackItemState extends State<_AnimatedTrackItem> {
+class _AnimatedTrackItemState extends State<_AnimatedTrackItem> {
   bool _isPressed = false;
 
   @override
@@ -433,18 +499,16 @@ class _ConfirmAddButton extends StatefulWidget {
   const _ConfirmAddButton({required this.onConfirm});
 
   @override
-  __ConfirmAddButtonState createState() => __ConfirmAddButtonState();
+  State<_ConfirmAddButton> createState() => _ConfirmAddButtonState();
 }
 
-class __ConfirmAddButtonState extends State<_ConfirmAddButton> {
+class _ConfirmAddButtonState extends State<_ConfirmAddButton> {
   bool _isAdding = false;
   bool _isAdded = false;
 
   void _handleAdd() {
     if (_isAdding || _isAdded) return;
-
     setState(() => _isAdding = true);
-
     Future.delayed(const Duration(milliseconds: 1200), () {
       if (mounted) {
         setState(() {
@@ -475,9 +539,9 @@ class __ConfirmAddButtonState extends State<_ConfirmAddButton> {
         child: Center(
           child: _isAdded
               ? const Icon(Icons.check, color: Color(0xFF1CA4FF))
-              : Text(
+              : const Text(
                   'Добавить',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

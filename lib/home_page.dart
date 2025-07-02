@@ -1,10 +1,8 @@
-// lib/home_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'widgets/horizontal_tracks_widget.dart';
 import 'track_list_widget.dart';
 import 'queue_page.dart';
-import 'widgets/horizontal_tracks_widget.dart';
 import 'favorites_screen.dart';
 import 'search_page.dart';
 
@@ -28,9 +26,9 @@ class HomeContent extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
-              SizedBox(height: 24),
+              SizedBox(height: 10),
               HorizontalTracksWidget(),
-              SizedBox(height: 32),
+              SizedBox(height: 10), // Было 32 — уменьшили
               Text(
                 'ALL TRACKS',
                 style: TextStyle(
@@ -40,7 +38,7 @@ class HomeContent extends StatelessWidget {
                   letterSpacing: 1.5,
                 ),
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 8), // Было 16 — уменьшили
             ],
           ),
         ),
@@ -50,7 +48,6 @@ class HomeContent extends StatelessWidget {
             child: TrackListWidget(onTrackSelected: () {}),
           ),
         ),
-        const SizedBox(height: 85),
       ],
     );
   }
@@ -88,6 +85,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
+      resizeToAvoidBottomInset: false,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -155,74 +153,76 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-      bottomNavigationBar: BottomAppBar(
-        color: Colors.transparent,
-        elevation: 0,
-        padding: EdgeInsets.zero,
-        child: SizedBox(
-          height: 80,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final double width = constraints.maxWidth;
-              final double itemWidth = width / 3;
-              final double bubbleWidth = 64;
-              final double bubbleHeight = 52;
-              final double bubbleLeft =
-                  _currentIndex * itemWidth + (itemWidth - bubbleWidth) / 2;
-              final double bubbleTop = (80 - bubbleHeight) / 2;
+      bottomNavigationBar: SizedBox(
+        height: 80,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Container(
+                color: Color(0xFF0D325F), // нижняя часть градиента с экрана
+              ),
+            ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final double width = constraints.maxWidth;
+                final double itemWidth = width / 3;
+                final double bubbleWidth = 64;
+                final double bubbleHeight = 52;
+                final double bubbleLeft =
+                    _currentIndex * itemWidth + (itemWidth - bubbleWidth) / 2;
+                final double bubbleTop = (80 - bubbleHeight) / 2;
 
-              return Stack(
-                children: [
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    left: bubbleLeft,
-                    top: bubbleTop,
-                    child: Container(
-                      width: bubbleWidth,
-                      height: bubbleHeight,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1CA4FF),
-                        borderRadius: BorderRadius.circular(30),
+                return Stack(
+                  children: [
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      left: bubbleLeft,
+                      top: bubbleTop,
+                      child: Container(
+                        width: bubbleWidth,
+                        height: bubbleHeight,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1CA4FF),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
                       ),
                     ),
-                  ),
-                  // Возвращаемся к этому варианту, так как он самый логичный
-                  SizedBox.expand(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Center(
-                            child: _buildNavItem(0, 'assets/icons/home.svg'),
-                          ),
-                        ),
-                        Expanded(
-                          child: Center(
-                            child: _buildNavItem(
-                              1,
-                              'assets/icons/playlist.svg',
+                    SizedBox.expand(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Center(
+                              child: _buildNavItem(0, 'assets/icons/home.svg'),
                             ),
                           ),
-                        ),
-                        Expanded(
-                          child: Center(
-                            child: _buildNavItem(2, 'assets/icons/heart.svg'),
+                          Expanded(
+                            child: Center(
+                              child: _buildNavItem(
+                                1,
+                                'assets/icons/playlist.svg',
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                          Expanded(
+                            child: Center(
+                              child: _buildNavItem(2, 'assets/icons/heart.svg'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              );
-            },
-          ),
+                  ],
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // Возвращаем SVG иконки
   Widget _buildNavItem(int index, String asset) {
     return GestureDetector(
       onTap: () {

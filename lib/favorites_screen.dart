@@ -1,18 +1,13 @@
 import 'dart:ui';
+import 'package:eatune/managers/venue_session_manager.dart';
+import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:flutter/material.dart';
-import 'api.dart'; // Нужен для Track и ApiService
-import 'managers/favorites_manager.dart'; // Наш менеджер
-
-// Копируем сюда те же виджеты для подтверждения, что и в track_list_widget
-// В идеале их стоило бы вынести в отдельный общий файл, но для простоты пока так.
+import 'package:shimmer/shimmer.dart';
+import 'api.dart';
+import 'managers/favorites_manager.dart';
 
 // Функция для отображения кастомного SnackBar
 void _showCustomSnackBar(BuildContext context, String message) {
-  // ИЗМЕНЕНО: Удалена строка hideCurrentSnackBar().
-  // Это самая вероятная причина, по которой прерывалась анимация исчезновения
-  // и ломалась плавность появления следующего уведомления.
-  // Теперь Flutter сам будет управлять анимациями.
-
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(
@@ -51,7 +46,7 @@ class FavoritesScreen extends StatelessWidget {
           },
         );
       },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
+      transitionBuilder: (context, animation, _, child) {
         return FadeTransition(
           opacity: animation,
           child: ScaleTransition(
@@ -67,12 +62,34 @@ class FavoritesScreen extends StatelessWidget {
   }
 
   void _confirmTrackSelection(BuildContext context, String id) async {
-    bool success = await ApiService.addToQueue(id);
+    final venueId = await VenueSessionManager.getActiveVenueId();
+    if (venueId == null) {
+      if (context.mounted) {
+        _showCustomSnackBar(
+          context,
+          'Ошибка сессии. Отсканируйте QR-код заново.',
+        );
+      }
+      return;
+    }
+
+    final ApiResponse response = await ApiService.addToQueue(
+      trackId: id,
+      venueId: venueId,
+    );
     if (context.mounted) {
-      if (success) {
-        _showCustomSnackBar(context, 'Трек добавлен в очередь!');
+      if (response.success) {
+        _showCustomSnackBar(context, response.message);
       } else {
-        _showCustomSnackBar(context, 'Не удалось добавить трек');
+        if (response.message.startsWith('Вы сможете добавить трек')) {
+          showDialog(
+            context: context,
+            builder: (context) =>
+                CooldownDialog(serverMessage: response.message),
+          );
+        } else {
+          _showCustomSnackBar(context, response.message);
+        }
       }
     }
   }
@@ -98,7 +115,6 @@ class FavoritesScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               if (favoriteTracks.isEmpty)
-                // Виджет-заглушка, если список пуст
                 Expanded(
                   child: Center(
                     child: Column(
@@ -130,14 +146,12 @@ class FavoritesScreen extends StatelessWidget {
                   ),
                 )
               else
-                // Список избранных треков
                 Expanded(
                   child: ListView.builder(
                     padding: EdgeInsets.zero,
                     itemCount: favoriteTracks.length,
                     itemBuilder: (context, index) {
                       final track = favoriteTracks[index];
-                      // Мы можем переиспользовать тот же _AnimatedTrackItem
                       return _AnimatedTrackItem(
                         onTap: () => _showConfirmationModal(context, track),
                         child: Padding(
@@ -147,16 +161,56 @@ class FavoritesScreen extends StatelessWidget {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: Image.network(
-                                  track.coverUrl ??
-                                      'https://placehold.co/100x100/374151/FFFFFF?text=?',
+                                  track.coverUrl ?? '',
                                   width: 50,
                                   height: 50,
                                   fit: BoxFit.cover,
+                                  frameBuilder:
+                                      (
+                                        context,
+                                        child,
+                                        frame,
+                                        wasSynchronouslyLoaded,
+                                      ) {
+                                        if (wasSynchronouslyLoaded)
+                                          return child;
+                                        return AnimatedOpacity(
+                                          opacity: frame == null ? 0 : 1,
+                                          duration: const Duration(
+                                            milliseconds: 300,
+                                          ),
+                                          curve: Curves.easeOut,
+                                          child: child,
+                                        );
+                                      },
+                                  loadingBuilder:
+                                      (context, child, loadingProgress) {
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return Shimmer.fromColors(
+                                          baseColor: Colors.grey[850]!,
+                                          highlightColor: Colors.grey[800]!,
+                                          child: Container(
+                                            width: 50,
+                                            height: 50,
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey[850],
+                                              borderRadius:
+                                                  BorderRadius.circular(8.0),
+                                            ),
+                                          ),
+                                        );
+                                      },
                                   errorBuilder: (context, error, stackTrace) =>
                                       Container(
                                         width: 50,
                                         height: 50,
-                                        color: const Color(0xFF374151),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF374151),
+                                          borderRadius: BorderRadius.circular(
+                                            8.0,
+                                          ),
+                                        ),
                                         child: const Icon(
                                           Icons.music_note,
                                           color: Colors.grey,
@@ -204,7 +258,6 @@ class FavoritesScreen extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              // На экране избранного мы просто удаляем трек из списка
                               IconButton(
                                 icon: const Icon(
                                   Icons.favorite,
@@ -233,8 +286,6 @@ class FavoritesScreen extends StatelessWidget {
     );
   }
 }
-
-// ... Виджеты-хелперы, скопированные из track_list_widget ...
 
 class _AnimatedTrackItem extends StatefulWidget {
   final VoidCallback onTap;

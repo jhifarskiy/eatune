@@ -1,5 +1,15 @@
+// lib/api.dart
+
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+
+// НОВЫЙ КЛАСС для ответов от API
+class ApiResponse {
+  final bool success;
+  final String message;
+
+  ApiResponse({required this.success, this.message = ''});
+}
 
 class Track {
   final String id;
@@ -61,18 +71,29 @@ class ApiService {
     return [];
   }
 
-  // [ИЗМЕНЕНО] Теперь добавляет трек в очередь
-  static Future<bool> addToQueue(String id) async {
+  // ИЗМЕНЕНИЕ: Метод теперь возвращает ApiResponse вместо bool
+  static Future<ApiResponse> addToQueue({
+    required String trackId,
+    required String venueId,
+  }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/queue'), // Используем новый маршрут
+        Uri.parse('$baseUrl/queue'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'id': id}),
+        body: json.encode({'id': trackId, 'venueId': venueId}),
       );
-      return response.statusCode == 201; // Успешное добавление - это код 201
+
+      if (response.statusCode == 201) {
+        return ApiResponse(success: true, message: 'Трек добавлен в очередь!');
+      } else {
+        // Пытаемся извлечь сообщение об ошибке от сервера
+        final body = json.decode(response.body);
+        final errorMessage = body['error'] ?? 'Не удалось добавить трек';
+        return ApiResponse(success: false, message: errorMessage);
+      }
     } catch (e) {
       print('Error adding to queue: $e');
-      return false;
+      return ApiResponse(success: false, message: 'Ошибка сети');
     }
   }
 
@@ -93,7 +114,6 @@ class ApiService {
     return null;
   }
 
-  // [НОВЫЙ] Метод для получения всей очереди
   static Future<List<Track>> getQueue() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/queue'));

@@ -1,21 +1,38 @@
+// lib/main.dart
+
 import 'package:eatune/managers/favorites_manager.dart';
+import 'package:eatune/managers/venue_session_manager.dart'; // <-- НОВЫЙ ИМПОРТ
+import 'package:eatune/venue_scan_page.dart'; // <-- НОВЫЙ ИМПОРТ
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 
 void main() async {
+  // Убеждаемся, что все биндинги инициализированы
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ИЗМЕНЕНИЕ: Инициализируем менеджер избранного
   await FavoritesManager.init();
-  runApp(const EatOneApp());
+
+  // ИЗМЕНЕНИЕ: Проверяем, есть ли активная сессия
+  final String? activeVenueId = await VenueSessionManager.getActiveVenueId();
+
+  // ИЗМЕНЕНИЕ: Определяем, какой экран будет стартовым
+  final Widget initialScreen = (activeVenueId == null)
+      ? const VenueScanPage()
+      : const HomePage();
+
+  // Запускаем приложение с нужным стартовым экраном
+  runApp(EatOneApp(initialScreen: initialScreen));
 }
 
 class EatOneApp extends StatelessWidget {
-  const EatOneApp({super.key});
+  // ИЗМЕНЕНИЕ: Добавляем поле для стартового экрана
+  final Widget initialScreen;
+
+  const EatOneApp({super.key, required this.initialScreen});
 
   @override
   Widget build(BuildContext context) {
-    // Получаем базовую тему, чтобы не переопределить размеры и жирность
-    final baseTextTheme = ThemeData.light().textTheme;
-
     return MaterialApp(
       title: 'EatOne',
       debugShowCheckedModeBanner: false,
@@ -23,57 +40,25 @@ class EatOneApp extends StatelessWidget {
         useMaterial3: false,
         fontFamily: 'Montserrat',
         scaffoldBackgroundColor: const Color(0xFF010A15),
-
-        // ИЗМЕНЕНИЕ: Задаем кастомную тему для текста
-        textTheme: baseTextTheme
+        textTheme: ThemeData.light().textTheme
             .copyWith(
-              // Для обычного текста
-              bodyLarge: baseTextTheme.bodyLarge?.copyWith(letterSpacing: -0.3),
-              bodyMedium: baseTextTheme.bodyMedium?.copyWith(
-                letterSpacing: -0.3,
-              ),
-              bodySmall: baseTextTheme.bodySmall?.copyWith(letterSpacing: -0.3),
-
-              // Для заголовков
-              titleLarge: baseTextTheme.titleLarge?.copyWith(
-                letterSpacing: -0.4,
-              ),
-              titleMedium: baseTextTheme.titleMedium?.copyWith(
-                letterSpacing: -0.4,
-              ),
-              titleSmall: baseTextTheme.titleSmall?.copyWith(
-                letterSpacing: -0.4,
-              ),
-
-              // Для надписей на кнопках и т.д.
-              labelLarge: baseTextTheme.labelLarge?.copyWith(
-                letterSpacing: -0.4,
-              ),
-              labelMedium: baseTextTheme.labelMedium?.copyWith(
-                letterSpacing: -0.4,
-              ),
-              labelSmall: baseTextTheme.labelSmall?.copyWith(
-                letterSpacing: -0.4,
-              ),
-
-              // Для крупных заголовков
-              headlineLarge: baseTextTheme.headlineLarge?.copyWith(
-                letterSpacing: -0.4,
-              ),
-              headlineMedium: baseTextTheme.headlineMedium?.copyWith(
-                letterSpacing: -0.4,
-              ),
-              headlineSmall: baseTextTheme.headlineSmall?.copyWith(
-                letterSpacing: -0.4,
-              ),
+              bodyLarge: const TextStyle(letterSpacing: -0.4),
+              bodyMedium: const TextStyle(letterSpacing: -0.4),
+              bodySmall: const TextStyle(letterSpacing: -0.4),
+              titleLarge: const TextStyle(letterSpacing: -0.4),
+              titleMedium: const TextStyle(letterSpacing: -0.4),
+              titleSmall: const TextStyle(letterSpacing: -0.4),
+              labelLarge: const TextStyle(letterSpacing: -0.4),
+              labelMedium: const TextStyle(letterSpacing: -0.4),
+              labelSmall: const TextStyle(letterSpacing: -0.4),
+              headlineLarge: const TextStyle(letterSpacing: -0.4),
+              headlineMedium: const TextStyle(letterSpacing: -0.4),
+              headlineSmall: const TextStyle(letterSpacing: -0.4),
             )
-            .apply(
-              // Применяем основной цвет ко всем стилям
-              bodyColor: Colors.white,
-              displayColor: Colors.white,
-            ),
+            .apply(bodyColor: Colors.white, displayColor: Colors.white),
       ),
-      home: const HomePage(),
+      // ИЗМЕНЕНИЕ: Используем initialScreen в качестве домашнего экрана
+      home: initialScreen,
     );
   }
 }

@@ -24,9 +24,9 @@
       </div>
       <div class="text-center space-y-2">
         <h1 id="trackTitle" class="text-2xl font-bold truncate">Ожидание трека...</h1>
-        <p id="trackArtist" class="text-md text-gray-400">Выберите песню в приложении</p>
+        <p id="trackArtist" class="text-md text-gray-400">Очередь пуста</p>
       </div>
-      <audio id="audioPlayer"></audio>
+      <audio id="audioPlayer" controls class="hidden"></audio>
       <div class="space-y-3">
         <div class="w-full">
           <div id="progressBarContainer" class="bg-gray-700 h-2 rounded-full w-full cursor-pointer">
@@ -58,10 +58,23 @@
       <ul id="queueList" class="space-y-2"></ul>
     </div>
 
-    <button id="unlockAudioBtn"
-      class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-full text-lg shadow-lg w-full">
-      Активировать плеер
-    </button>
+    <div id="initial-state-container" class="text-center p-8 space-y-4">
+      <div class="relative inline-block">
+        <svg class="w-24 h-24 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+            d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2ZM21 16c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2Z">
+          </path>
+        </svg>
+        <div id="status-indicator" class="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-gray-800"></div>
+      </div>
+      <h1 class="text-3xl font-bold">Eatune Player</h1>
+      <p id="status-text" class="text-gray-400">Ожидание подключения...</p>
+      <input type="text" id="venueIdInput" placeholder="Введите ID заведения" class="bg-gray-700 text-white text-center rounded-lg p-2 w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-green-500">
+      <button id="connectBtn"
+        class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-full text-lg shadow-lg w-full max-w-xs">
+        Подключиться
+      </button>
+    </div>
   </div>
 
   <script>
@@ -71,7 +84,13 @@
       const trackTitle = document.getElementById('trackTitle');
       const trackArtist = document.getElementById('trackArtist');
       const playerContainer = document.getElementById('player-container');
-      const unlockAudioBtn = document.getElementById('unlockAudioBtn');
+      const initialStateContainer = document.getElementById('initial-state-container');
+      
+      const connectBtn = document.getElementById('connectBtn');
+      const venueIdInput = document.getElementById('venueIdInput');
+      const statusIndicator = document.getElementById('status-indicator');
+      const statusText = document.getElementById('status-text');
+
       const playPauseBtn = document.getElementById('playPauseBtn');
       const playIcon = document.getElementById('playIcon');
       const pauseIcon = document.getElementById('pauseIcon');
@@ -83,92 +102,110 @@
       const queueList = document.getElementById('queueList');
 
       let currentTrackId = null;
-      let isAudioUnlocked = false;
+      let venueId = null;
+      let ws = null;
 
-      // --- ИЗМЕНЕННЫЕ ФУНКЦИИ ---
+      // --- ИЗМЕНЕНИЕ: Логика подключения через WebSocket ---
 
-      // Запрашивает текущий трек с правильного эндпоинта
-      async function pollForTrack() {
-        try {
-          // ИЗМЕНЕНО: '/playlist/current' -> '/track'
-          const res = await fetch('/track'); 
-          // Проверяем, что ответ не пустой
-          const text = await res.text();
-          if (!text) {
-             console.log("No current track, queue might be empty.");
-             updatePlayerUI(null); // Очищаем UI если ничего не играет
-             return;
-          }
-          const data = JSON.parse(text);
-
-          if (!data || !data.id) {
-             updatePlayerUI(null);
-             return;
-          }
-
-          // Если пришел новый трек, обновляем плеер
-          if (currentTrackId !== data.id) {
-            console.log("New track received:", data.title);
-            currentTrackId = data.id;
-            updatePlayerUI(data);
-          }
-        } catch (err) {
-          console.error("pollForTrack error:", err);
+      function connect() {
+        venueId = venueIdInput.value.trim();
+        if (!venueId) {
+            statusText.textContent = 'Ошибка: ID заведения не может быть пустым.';
+            return;
         }
-      }
 
-      // Запрашивает очередь с правильного эндпоинта
-      async function pollForQueue() {
-        try {
-          // ИЗМЕНЕНО: '/playlist/queue' -> '/queue'
-          const res = await fetch('/queue');
-          const queue = await res.json();
-          // Отображаем только треки, которые идут *после* текущего
-          updateQueueUI(queue.slice(1));
-        } catch (err) {
-          console.error("pollForQueue error:", err);
-        }
-      }
+        // Формируем адрес для WebSocket
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}?venueId=${venueId}`;
+        
+        console.log(`Attempting to connect to ${wsUrl}`);
+        statusText.textContent = `Подключение к ${venueId}...`;
+        ws = new WebSocket(wsUrl);
 
-      // Переход к следующему треку
+        ws.onopen = function() {
+            console.log('WebSocket connection established.');
+            statusText.textContent = 'Подключено!';
+            statusIndicator.classList.remove('bg-red-500');
+            statusIndicator.classList.add('bg-green-500');
+            
+            // Прячем начальный экран и показываем плеер
+            initialStateContainer.classList.add('hidden');
+            playerContainer.classList.remove('hidden');
+        };
+        
+        // Главный обработчик сообщений от сервера
+        ws.onmessage = function(event) {
+            console.log('Message from server: ', event.data);
+            try {
+                const message = JSON.parse(event.data);
+                if (message.type === 'queue_update') {
+                    const queue = message.queue || [];
+                    const currentTrack = queue[0] || null;
+                    
+                    if (currentTrack?.id !== currentTrackId) {
+                        currentTrackId = currentTrack?.id;
+                        updatePlayerUI(currentTrack);
+                    }
+                    updateQueueUI(queue.slice(1));
+                }
+            } catch (e) {
+                console.error("Failed to parse server message:", e);
+            }
+        };
+
+        ws.onclose = function() {
+            console.log('WebSocket connection closed.');
+            statusText.textContent = 'Соединение потеряно. Попробуйте снова.';
+            statusIndicator.classList.remove('bg-green-500');
+            statusIndicator.classList.add('bg-red-500');
+
+            // Возвращаем начальный экран
+            initialStateContainer.classList.remove('hidden');
+            playerContainer.classList.add('hidden');
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket Error: ', error);
+            statusText.textContent = 'Ошибка подключения.';
+        };
+      }
+      
+      connectBtn.addEventListener('click', connect);
+
+
+      // --- ИЗМЕНЕНИЕ: Обновленная функция для перехода к следующему треку ---
       async function nextTrack() {
-          console.log("Track ended or skipped. Requesting next track.");
+          console.log("Track ended. Requesting next track from server.");
           audioPlayer.pause();
           currentTrackId = null;
           try {
-              // ИЗМЕНЕНО: Используем эндпоинт /track/next для сдвига очереди на сервере
-              const response = await fetch('/track/next', { method: 'POST' });
+              // Отправляем запрос на сдвиг очереди для нашего заведения
+              const response = await fetch('/track/next', { 
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ venueId: venueId }) 
+              });
               const result = await response.json();
-              if (result.success) {
-                  console.log("Server confirmed next track. Polling for it.");
-                  // Сразу же запрашиваем новый трек, не дожидаясь таймера
-                  pollForTrack();
-                  pollForQueue();
-              }
+              // После этого сервер сам пришлет новую очередь через WebSocket
+              console.log("Server response to next track:", result);
           } catch(e) {
-              console.error("Failed to move to next track:", e);
+              console.error("Failed to request next track:", e);
           }
       }
-
-      // --- КОНЕЦ ИЗМЕНЕНИЙ ---
 
       // Обновляет UI плеера
       function updatePlayerUI(track) {
         if (track && track.id) {
             trackTitle.textContent = track.title || 'Без названия';
             trackArtist.textContent = track.artist || 'Неизвестный исполнитель';
-            coverArt.src = track.coverUrl || `https://placehold.co/400x400/1F2937/FFFFFF?text=${encodeURIComponent(track.title.charAt(0))}`;
-            coverArt.onerror = () => { coverArt.src = 'https://placehold.co/400x400/1F2937/FFFFFF?text=Error'; };
-            // Важно: устанавливаем источник звука только если он изменился
-            if(audioPlayer.src !== track.trackUrl) {
+            coverArt.src = track.coverUrl || `https://placehold.co/400x400/1F2937/FFFFFF?text=...`;
+            if (audioPlayer.src !== track.trackUrl) {
                 audioPlayer.src = track.trackUrl;
             }
-            if (isAudioUnlocked && audioPlayer.paused) {
-                audioPlayer.play().catch(e => console.error("Play failed:", e));
-            }
+            audioPlayer.play().catch(e => console.error("Autoplay failed:", e));
         } else {
             trackTitle.textContent = 'Ожидание трека...';
-            trackArtist.textContent = 'Выберите песню в приложении';
+            trackArtist.textContent = 'Очередь пуста';
             coverArt.src = 'https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune';
             audioPlayer.src = '';
             updateProgress();
@@ -180,9 +217,12 @@
         if (Array.isArray(queue) && queue.length > 0) {
           queueContainer.classList.remove('hidden');
           queueList.innerHTML = queue.map(track => `
-            <li class="bg-gray-700 px-4 py-2 rounded-lg flex flex-col">
-              <span class="text-sm font-medium truncate">${track.title}</span>
-              <span class="text-xs text-gray-400 truncate">${track.artist}</span>
+            <li class="bg-gray-700 px-4 py-2 rounded-lg flex items-center space-x-4">
+              <img src="${track.coverUrl || 'https://placehold.co/50x50/374151/FFFFFF?text=?'}" class="w-10 h-10 rounded-md">
+              <div class="flex-1 truncate">
+                <span class="text-sm font-medium block truncate">${track.title}</span>
+                <span class="text-xs text-gray-400 block truncate">${track.artist}</span>
+              </div>
             </li>
           `).join('');
         } else {
@@ -191,78 +231,49 @@
         }
       }
 
-      // Обработчик кнопки активации плеера
-      unlockAudioBtn.addEventListener('click', () => {
-        isAudioUnlocked = true;
-        // Тестовый звук для разблокировки аудио в браузере
-        audioPlayer.play().then(() => audioPlayer.pause()).catch(() => {});
-
-        unlockAudioBtn.classList.add('hidden');
-        playerContainer.classList.remove('hidden');
-        
-        // Запускаем периодические опросы сервера
-        setInterval(pollForTrack, 3000); // Чаще проверяем текущий трек
-        setInterval(pollForQueue, 5000);
-        
-        // Первичный запуск
-        pollForTrack();
-        pollForQueue();
-      });
 
       // --- УПРАВЛЕНИЕ ВОСПРОИЗВЕДЕНИЕМ ---
-
       playPauseBtn.addEventListener('click', () =>
         audioPlayer.paused ? audioPlayer.play() : audioPlayer.pause()
       );
-
       audioPlayer.onplay = () => {
         playIcon.classList.add('hidden');
         pauseIcon.classList.remove('hidden');
       };
-
       audioPlayer.onpause = () => {
         playIcon.classList.remove('hidden');
         pauseIcon.classList.add('hidden');
       };
-
-      // Когда трек закончился, вызываем функцию перехода к следующему
       audioPlayer.addEventListener('ended', nextTrack);
 
       // --- ИНДИКАТОР ВЫПОЛНЕНИЯ ---
-
-      // Обновление прогресс-бара
       function updateProgress() {
           const duration = audioPlayer.duration;
           const currentTime = audioPlayer.currentTime;
-
-          if (isNaN(duration)) {
+          if (isNaN(duration) || duration === 0) {
               progressBar.style.width = '0%';
               currentTimeEl.textContent = '0:00';
               totalDurationEl.textContent = '0:00';
               return;
           }
-          
           const progressPercent = (currentTime / duration) * 100;
           progressBar.style.width = `${progressPercent}%`;
           currentTimeEl.textContent = formatTime(currentTime);
           totalDurationEl.textContent = formatTime(duration);
       }
       
-      // Перемотка по клику на прогресс-бар
       progressBarContainer.addEventListener('click', (e) => {
         const { duration } = audioPlayer;
         if (duration) {
-          const clickX = e.offsetX;
-          const newTime = (clickX / progressBarContainer.clientWidth) * duration;
+          const rect = progressBarContainer.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const newTime = (clickX / rect.width) * duration;
           audioPlayer.currentTime = newTime;
         }
       });
-
       audioPlayer.addEventListener('timeupdate', updateProgress);
       audioPlayer.addEventListener('loadedmetadata', updateProgress);
 
-
-      // Форматирование времени из секунд в "ММ:СС"
       function formatTime(s) {
         if (isNaN(s)) return '0:00';
         const minutes = Math.floor(s / 60);
