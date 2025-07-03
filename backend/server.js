@@ -137,38 +137,39 @@ app.post('/queue', async (req, res) => {
     const venue = venueQueues[venueId];
     const now = Date.now();
 
+    // ПРОВЕРКА 1: Трек на кулдауне, потому что недавно играл?
     if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
         const timeLeft = Math.ceil((venue.trackCooldowns.get(trackId) - now) / 60000);
         return res.status(429).json({ error: `Этот трек недавно играл. Попробуйте снова через ${timeLeft} мин.` });
+    }
+
+    // ПРОВЕРКА 2: Трек уже заказан пользователем и ждет в очереди?
+    if (venue.queue.some(track => track.id === trackId && !track.isBackgroundTrack)) {
+        return res.status(409).json({ error: "Этот трек уже в очереди" });
     }
 
     const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
     if (!selectedTrack) {
         return res.status(404).json({ error: 'Track not found' });
     }
-
     const newTrack = { ...selectedTrack, isBackgroundTrack: false };
 
-    if (venue.queue.some(t => t.id === newTrack.id && !t.isBackgroundTrack)) {
-        return res.status(409).json({ error: "Этот трек уже в очереди" });
-    }
-    
+    // ПЕРЕСТРАИВАЕМ ОЧЕРЕДЬ
     const currentlyPlaying = venue.queue.length > 0 ? venue.queue[0] : null;
-    let newQueue = [];
+    const existingUserTracks = venue.queue.filter((track, index) => index > 0 && !track.isBackgroundTrack);
 
+    let newQueue = [];
     if (currentlyPlaying) {
         newQueue.push(currentlyPlaying);
     }
-    
-    newQueue.push(...venue.queue.filter((track, index) => index > 0 && !track.isBackgroundTrack));
+    newQueue.push(...existingUserTracks);
     newQueue.push(newTrack);
 
     venue.queue = newQueue;
-    // ИЗМЕНЕНИЕ: Убрана установка кулдауна отсюда
-    
+
     broadcastQueueUpdate(venueId);
-    console.log(`Track "${newTrack.title}" added for venue ${venueId}. Queue updated.`);
-    res.status(201).json({ success: true, message: 'Трек добавлен в очередь!', queue: venue.queue });
+    console.log(`Track "${newTrack.title}" added for venue ${venueId}.`);
+    res.status(201).json({ success: true, message: 'Трек добавлен в очередь!' });
 });
 
 app.post('/track/next', (req, res) => {
@@ -180,16 +181,15 @@ app.post('/track/next', (req, res) => {
 
     if (venue.queue.length > 0) {
         const finishedTrack = venue.queue.shift();
-        
-        // ИЗМЕНЕНИЕ: Установка кулдауна перенесена сюда.
-        // Кулдаун устанавливается, только когда трек ЗАКОНЧИЛСЯ.
+
+        // Устанавливаем кулдаун, только когда трек ЗАКОНЧИЛСЯ
         venue.trackCooldowns.set(finishedTrack.id, Date.now() + TRACK_COOLDOWN_MINUTES * 60 * 1000);
 
         venue.history.unshift(finishedTrack);
         if (venue.history.length > HISTORY_MAX_SIZE) {
             venue.history.pop();
         }
-        console.log(`Track "${finishedTrack.title}" finished and put on cooldown. Moved to history for venue ${venueId}.`);
+        console.log(`Track "${finishedTrack.title}" finished. Cooldown started. Moved to history.`);
     }
     
     ensureSufficientBackgroundTracks(venueId);
