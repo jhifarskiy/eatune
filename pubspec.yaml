@@ -36,8 +36,8 @@ dependencies:
   google_fonts: ^6.2.1
   shimmer: ^3.0.0 
   mobile_scanner: ^5.1.1
-  web_socket_channel: ^2.4.0 
-  provider: ^6.1.2
+  provider: ^6.1.2          # <-- ДОБАВЬТЕ ЭТУ СТРОКУ
+  web_socket_channel: ^2.4.5  # <-- И ЭТУ СТРОКУ
 
 
   # The following adds the Cupertino Icons font to your application.

@@ -25,11 +25,10 @@ class QueueManager extends ChangeNotifier {
 
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
-      print("QueueManager: No active venue session, can't connect.");
+      print("QueueManager: Нет активной сессии, подключение невозможно.");
       return;
     }
 
-    // ИЗМЕНЕНИЕ: Используем реальный адрес сервера и защищенный протокол wss
     final wsUrl = Uri.parse('wss://eatune-api.onrender.com?venueId=$venueId');
 
     try {
@@ -37,13 +36,13 @@ class QueueManager extends ChangeNotifier {
       notifyListeners();
 
       _channel = WebSocketChannel.connect(wsUrl);
-      print("QueueManager: Connecting to $wsUrl");
+      print("QueueManager: Подключение к $wsUrl");
 
       await _channel!.ready;
 
       _isConnected = true;
       _isConnecting = false;
-      print("QueueManager: WebSocket connected.");
+      print("QueueManager: WebSocket подключен.");
       notifyListeners();
 
       _channel!.stream.listen(
@@ -58,20 +57,17 @@ class QueueManager extends ChangeNotifier {
         onDone: () {
           _isConnected = false;
           _isConnecting = false;
-          print("QueueManager: WebSocket disconnected.");
           notifyListeners();
         },
         onError: (error) {
           _isConnected = false;
           _isConnecting = false;
-          print("QueueManager: WebSocket error: $error");
           notifyListeners();
         },
       );
     } catch (e) {
       _isConnected = false;
       _isConnecting = false;
-      print("QueueManager: Failed to connect: $e");
       notifyListeners();
     }
   }
@@ -82,7 +78,6 @@ class QueueManager extends ChangeNotifier {
     _isConnected = false;
     _isConnecting = false;
     _queue = [];
-    print("QueueManager: Disconnected manually.");
     notifyListeners();
   }
 }

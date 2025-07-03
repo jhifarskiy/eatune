@@ -1,32 +1,36 @@
 // lib/main.dart
 
 import 'package:eatune/managers/favorites_manager.dart';
-import 'package:eatune/managers/venue_session_manager.dart'; // <-- НОВЫЙ ИМПОРТ
-import 'package:eatune/venue_scan_page.dart'; // <-- НОВЫЙ ИМПОРТ
+import 'package:eatune/managers/queue_manager.dart';
+import 'package:eatune/managers/venue_session_manager.dart';
+import 'package:eatune/venue_scan_page.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'home_page.dart';
 
 void main() async {
-  // Убеждаемся, что все биндинги инициализированы
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ИЗМЕНЕНИЕ: Инициализируем менеджер избранного
   await FavoritesManager.init();
-
-  // ИЗМЕНЕНИЕ: Проверяем, есть ли активная сессия
   final String? activeVenueId = await VenueSessionManager.getActiveVenueId();
 
-  // ИЗМЕНЕНИЕ: Определяем, какой экран будет стартовым
+  final queueManager = QueueManager();
+  if (activeVenueId != null) {
+    queueManager.connect();
+  }
+
   final Widget initialScreen = (activeVenueId == null)
       ? const VenueScanPage()
       : const HomePage();
 
-  // Запускаем приложение с нужным стартовым экраном
-  runApp(EatOneApp(initialScreen: initialScreen));
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => queueManager,
+      child: EatOneApp(initialScreen: initialScreen),
+    ),
+  );
 }
 
 class EatOneApp extends StatelessWidget {
-  // ИЗМЕНЕНИЕ: Добавляем поле для стартового экрана
   final Widget initialScreen;
 
   const EatOneApp({super.key, required this.initialScreen});
@@ -57,7 +61,6 @@ class EatOneApp extends StatelessWidget {
             )
             .apply(bodyColor: Colors.white, displayColor: Colors.white),
       ),
-      // ИЗМЕНЕНИЕ: Используем initialScreen в качестве домашнего экрана
       home: initialScreen,
     );
   }

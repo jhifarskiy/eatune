@@ -1,234 +1,250 @@
-import 'dart:async';
+import 'package:eatune/managers/queue_manager.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'api.dart';
 
-class QueuePage extends StatefulWidget {
+class QueuePage extends StatelessWidget {
   const QueuePage({super.key});
 
   @override
-  State<QueuePage> createState() => _QueuePageState();
+  Widget build(BuildContext context) {
+    return Consumer<QueueManager>(
+      builder: (context, queueManager, child) {
+        if (queueManager.isConnecting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+
+        if (!queueManager.isConnected) {
+          return _buildConnectionErrorState(context, queueManager);
+        }
+
+        final queue = queueManager.queue;
+        final nowPlaying = queue.isNotEmpty ? queue.first : null;
+        final upNext = queue.length > 1 ? queue.sublist(1) : [];
+
+        if (nowPlaying == null) {
+          return _buildEmptyState(context);
+        }
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(24, 10, 24, 85),
+          children: [
+            _buildSectionTitle('Сейчас играет'),
+            _buildNowPlayingCard(nowPlaying),
+            if (upNext.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              _buildSectionTitle('Далее'),
+              ...upNext
+                  .map(
+                    (track) =>
+                        _buildQueueItem(track, upNext.indexOf(track) + 1),
+                  )
+                  .toList(),
+            ],
+          ],
+        );
+      },
+    );
+  }
 }
 
-class _QueuePageState extends State<QueuePage> {
-  List<Track> _queue = [];
-  Timer? _timer;
-  bool _isLoading = true;
+// --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ, ВЫНЕСЕННЫЕ ИЗ КЛАССА ---
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchQueue();
-    _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      _fetchQueue(isSilent: true);
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _fetchQueue({bool isSilent = false}) async {
-    if (!isSilent && mounted) {
-      setState(() => _isLoading = true);
-    }
-    try {
-      final queue = await ApiService.getQueue();
-      if (mounted) {
-        setState(() {
-          _queue = queue;
-        });
-      }
-    } catch (e) {
-      print("Error fetching queue: $e");
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final nowPlaying = _queue.isNotEmpty ? _queue.first : null;
-    final upNext = _queue.length > 1 ? _queue.sublist(1) : [];
-
-    // ИЗМЕНЕНО: Scaffold и AppBar удалены. Виджет теперь просто контент.
-    return RefreshIndicator(
-      onRefresh: _fetchQueue,
-      backgroundColor: const Color(0xFF1CA4FF),
-      color: Colors.white,
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.white))
-          : ListView(
-              // Добавляем отступы, чтобы соответствовать другим экранам
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 85),
-              children: [
-                if (nowPlaying != null) _buildSectionTitle('Сейчас играет'),
-                if (nowPlaying != null) _buildNowPlayingCard(nowPlaying),
-                if (nowPlaying == null && !_isLoading) _buildEmptyState(),
-
-                if (upNext.isNotEmpty) const SizedBox(height: 24),
-                if (upNext.isNotEmpty) _buildSectionTitle('Далее'),
-                if (upNext.isNotEmpty)
-                  ...List.generate(upNext.length, (index) {
-                    return _buildQueueItem(upNext[index], index + 1);
-                  }),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0, top: 16.0),
-      child: Text(
-        title.toUpperCase(),
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.5),
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.5,
-          fontSize: 12,
-        ),
+Widget _buildSectionTitle(String title) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12.0, top: 16.0),
+    child: Text(
+      title.toUpperCase(),
+      style: TextStyle(
+        color: Colors.white.withOpacity(0.5),
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.5,
+        fontSize: 12,
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildNowPlayingCard(Track track) {
-    return Card(
-      color: const Color(0xFF173D7A),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            _buildCoverImage(track.coverUrl, 64, 16),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    track.title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    track.artist,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQueueItem(Track track, int position) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+Widget _buildNowPlayingCard(Track track) {
+  return Card(
+    color: const Color(0xFF173D7A).withOpacity(0.5),
+    elevation: 0,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    child: Padding(
+      padding: const EdgeInsets.all(16.0),
       child: Row(
         children: [
-          Text(
-            '$position',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.white.withOpacity(0.5),
-            ),
-          ),
+          _buildCoverImage(track.coverUrl, 64, 12),
           const SizedBox(width: 16),
-          _buildCoverImage(track.coverUrl, 48, 12),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   track.title,
-                  style: const TextStyle(fontSize: 16, color: Colors.white),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   track.artist,
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.7),
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildCoverImage(String? coverUrl, double size, double borderRadius) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: Image.network(
-        coverUrl ?? 'invalid_url',
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: const Color(0xFF4B5563),
-              borderRadius: BorderRadius.circular(borderRadius),
-            ),
-            child: const Icon(
-              Icons.music_note_rounded,
-              color: Colors.white70,
-              size: 28,
-            ),
-          );
-        },
+Widget _buildQueueItem(Track track, int position) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8.0),
+    child: Row(
+      children: [
+        Text(
+          '$position',
+          style: TextStyle(fontSize: 16, color: Colors.white.withOpacity(0.5)),
+        ),
+        const SizedBox(width: 16),
+        _buildCoverImage(track.coverUrl, 48, 8),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                track.title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                track.artist,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.5),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildCoverImage(String? coverUrl, double size, double borderRadius) {
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(borderRadius),
+    child: Image.network(
+      coverUrl ?? 'invalid_url',
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: const Color(0xFF4B5563),
+            borderRadius: BorderRadius.circular(borderRadius),
+          ),
+          child: Icon(
+            Icons.music_note_rounded,
+            color: Colors.white.withOpacity(0.7),
+            size: size * 0.5,
+          ),
+        );
+      },
+    ),
+  );
+}
+
+Widget _buildEmptyState(BuildContext context) {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.only(bottom: 80.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.queue_music,
+            size: 64,
+            color: Colors.white.withOpacity(0.3),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Очередь пуста',
+            style: TextStyle(fontSize: 18, color: Colors.white70),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Закажите песню, чтобы она появилась здесь',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white.withOpacity(0.5)),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.only(top: MediaQuery.of(context).size.height * 0.2),
-        child: Column(
-          children: [
-            Icon(
-              Icons.queue_music,
-              size: 64,
-              color: Colors.white.withOpacity(0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Очередь пуста',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.white.withOpacity(0.7),
+Widget _buildConnectionErrorState(
+  BuildContext context,
+  QueueManager queueManager,
+) {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.only(bottom: 80.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.wifi_off_rounded,
+            size: 64,
+            color: Colors.white.withOpacity(0.3),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Нет подключения к плееру',
+            style: TextStyle(fontSize: 18, color: Colors.white70),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => queueManager.connect(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1CA4FF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Закажите песню, чтобы она появилась здесь',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white.withOpacity(0.5)),
-            ),
-          ],
-        ),
+            child: const Text('Переподключиться'),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
