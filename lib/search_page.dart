@@ -137,11 +137,11 @@ class _SearchPageState extends State<SearchPage> {
     if (!mounted) return;
 
     if (response.success) {
-      // Добавляем трек в список "моих заказов"
       MyOrdersManager.add(id);
       _showCustomSnackBar(context, response.message);
     } else {
-      if (response.message.startsWith('Вы сможете добавить трек')) {
+      // ИЗМЕНЕНИЕ: Проверяем правильное сообщение от сервера
+      if (response.message.startsWith('Этот трек недавно играл')) {
         showDialog(
           context: context,
           builder: (context) => CooldownDialog(serverMessage: response.message),

@@ -27,7 +27,6 @@ class _NowPlayingCardState extends State<_NowPlayingCard> {
   @override
   void didUpdateWidget(covariant _NowPlayingCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Если трек сменился, обновляем его общую длительность
     if (widget.track.id != oldWidget.track.id) {
       setState(() {
         _trackDuration = _parseDuration(widget.track.duration);
@@ -56,7 +55,6 @@ class _NowPlayingCardState extends State<_NowPlayingCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Получаем доступ к QueueManager
     final queueManager = context.read<QueueManager>();
 
     return Card(
@@ -101,7 +99,6 @@ class _NowPlayingCardState extends State<_NowPlayingCard> {
               ],
             ),
             const SizedBox(height: 16),
-            // ИЗМЕНЕНИЕ: Используем ValueListenableBuilder для прогресса
             ValueListenableBuilder<Duration>(
               valueListenable: queueManager.currentTrackProgress,
               builder: (context, currentPosition, child) {
@@ -153,7 +150,6 @@ class _NowPlayingCardState extends State<_NowPlayingCard> {
   }
 }
 
-// Основной виджет экрана
 class QueuePage extends StatelessWidget {
   const QueuePage({super.key});
 
@@ -177,10 +173,12 @@ class QueuePage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(24, 10, 24, 85),
           children: [
             _buildSectionTitle('Сейчас играет'),
+            const SizedBox(height: 12),
             _NowPlayingCard(track: nowPlaying),
             if (upNext.isNotEmpty) ...[
               const SizedBox(height: 24),
               _buildSectionTitle('Далее в очереди'),
+              const SizedBox(height: 12),
               ...upNext
                   .map(
                     (track) =>
@@ -195,19 +193,15 @@ class QueuePage extends StatelessWidget {
   }
 }
 
-// --- ВСПОМОГАТЕЛЬНЫЕ ВИДЖЕТЫ И ФУНКЦИИ ---
-
+// ИЗМЕНЕНИЕ: Убран лишний отступ
 Widget _buildSectionTitle(String title) {
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 12.0, top: 16.0),
-    child: Text(
-      title.toUpperCase(),
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 1.5,
-      ),
+  return Text(
+    title.toUpperCase(),
+    style: const TextStyle(
+      color: Colors.white,
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 1.5,
     ),
   );
 }

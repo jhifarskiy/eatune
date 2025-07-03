@@ -81,11 +81,10 @@ class FavoritesScreen extends StatelessWidget {
     );
     if (context.mounted) {
       if (response.success) {
-        // Добавляем трек в список "моих заказов"
         MyOrdersManager.add(id);
         _showCustomSnackBar(context, response.message);
       } else {
-        if (response.message.startsWith('Вы сможете добавить трек')) {
+        if (response.message.startsWith('Этот трек недавно играл')) {
           showDialog(
             context: context,
             builder: (context) =>
@@ -108,9 +107,12 @@ class FavoritesScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const SizedBox(
+                height: 10,
+              ), // ИЗМЕНЕНИЕ: Добавлен верхний отступ для выравнивания
+              const Text(
                 'FAVORITE LIST',
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -176,8 +178,9 @@ class FavoritesScreen extends StatelessWidget {
                                         frame,
                                         wasSynchronouslyLoaded,
                                       ) {
-                                        if (wasSynchronouslyLoaded)
+                                        if (wasSynchronouslyLoaded) {
                                           return child;
+                                        }
                                         return AnimatedOpacity(
                                           opacity: frame == null ? 0 : 1,
                                           duration: const Duration(
@@ -189,8 +192,9 @@ class FavoritesScreen extends StatelessWidget {
                                       },
                                   loadingBuilder:
                                       (context, child, loadingProgress) {
-                                        if (loadingProgress == null)
+                                        if (loadingProgress == null) {
                                           return child;
+                                        }
                                         return Shimmer.fromColors(
                                           baseColor: Colors.grey[850]!,
                                           highlightColor: Colors.grey[800]!,
