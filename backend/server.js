@@ -14,7 +14,7 @@ const dbName = 'eatune';
 
 const TRACK_COOLDOWN_MINUTES = 15;
 const HISTORY_MAX_SIZE = 30;
-const MIN_BACKGROUND_TRACKS = 3; // Сколько фоновых треков всегда должно быть в очереди
+const BACKGROUND_QUEUE_SIZE = 4;
 
 // --- Мидлвары и сервер ---
 app.use(cors());
@@ -38,41 +38,32 @@ function broadcastQueueUpdate(venueId) {
     }
 }
 
-// ИЗМЕНЕНИЕ: Функция теперь поддерживает минимальное кол-во фоновых треков
+// ИЗМЕНЕНИЕ: Функция теперь проверяет кулдаун треков
 function ensureSufficientBackgroundTracks(venueId) {
     const venue = venueQueues[venueId];
     if (!venue || backgroundPlaylist.length === 0) return;
 
-    // Считаем только треки, которые еще не играют и являются фоновыми
-    const upcomingBgTracks = venue.queue.filter((t, index) => index > 0 && t.isBackgroundTrack).length;
-    
-    // Если в очереди уже есть пользовательские треки, не добавляем фоновые
     const hasUserTracks = venue.queue.some(t => !t.isBackgroundTrack);
     if (hasUserTracks) return;
 
-    let tracksToAdd = MIN_BACKGROUND_TRACKS - upcomingBgTracks;
+    let tracksToAdd = BACKGROUND_QUEUE_SIZE - venue.queue.length;
+    if (tracksToAdd <= 0) return;
     
-    // Если играет фоновый трек и больше ничего нет, добавляем еще
-    if (venue.queue.length === 1 && venue.queue[0].isBackgroundTrack) {
-        tracksToAdd = MIN_BACKGROUND_TRACKS;
-    }
-    
-    // Если очередь пуста, добавляем треки
-    if (venue.queue.length === 0) {
-        tracksToAdd = MIN_BACKGROUND_TRACKS + 1; // +1 для текущего
-    }
-
-
     let currentTrackIndex = venue.backgroundTrackIndex || 0;
-    while (tracksToAdd > 0) {
+    let safeguard = backgroundPlaylist.length; // Защита от бесконечного цикла
+
+    while (tracksToAdd > 0 && safeguard > 0) {
         const nextTrack = backgroundPlaylist[currentTrackIndex];
-        
-        if (!venue.queue.some(t => t.id === nextTrack.id)) {
+        const isAlreadyInQueue = venue.queue.some(t => t.id === nextTrack.id);
+        const isOnCooldown = venue.trackCooldowns.has(nextTrack.id) && Date.now() < venue.trackCooldowns.get(nextTrack.id);
+
+        if (!isAlreadyInQueue && !isOnCooldown) {
             venue.queue.push({ ...nextTrack, isBackgroundTrack: true });
-             tracksToAdd--;
+            tracksToAdd--;
         }
         
         currentTrackIndex = (currentTrackIndex + 1) % backgroundPlaylist.length;
+        safeguard--;
     }
     venue.backgroundTrackIndex = currentTrackIndex;
 }
@@ -99,7 +90,7 @@ wss.on('connection', (ws, req) => {
     const venue = venueQueues[venueId];
     venue.listeners.add(ws);
     
-    ensureSufficientBackgroundTracks(venueId); // Используем новую функцию
+    ensureSufficientBackgroundTracks(venueId);
     broadcastQueueUpdate(venueId);
 
     ws.on('message', (message) => {
@@ -135,6 +126,7 @@ wss.on('connection', (ws, req) => {
 app.get('/tracks', (req, res) => {
     res.json(backgroundPlaylist);
 });
+
 app.post('/queue', async (req, res) => {
     const { id: trackId, venueId } = req.body;
     if (!trackId || !venueId) {
@@ -144,34 +136,49 @@ app.post('/queue', async (req, res) => {
         venueQueues[venueId] = { queue: [], history: [], listeners: new Set(), backgroundTrackIndex: 0, trackCooldowns: new Map() };
     }
     const venue = venueQueues[venueId];
-    // При добавлении трека пользователем, удаляем все фоновые из очереди
-    venue.queue = venue.queue.filter(track => !track.isBackgroundTrack);
-
     const now = Date.now();
+
     if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
         const timeLeft = Math.ceil((venue.trackCooldowns.get(trackId) - now) / 60000);
         return res.status(429).json({ error: `Этот трек недавно играл. Попробуйте снова через ${timeLeft} мин.` });
     }
+
     const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
     if (!selectedTrack) {
         return res.status(404).json({ error: 'Track not found' });
     }
+
     const newTrack = { ...selectedTrack, isBackgroundTrack: false };
+
     if (venue.queue.some(t => t.id === newTrack.id && !t.isBackgroundTrack)) {
         return res.status(409).json({ error: "Этот трек уже в очереди" });
     }
-    venue.queue.push(newTrack);
+    
+    const currentlyPlaying = venue.queue.length > 0 ? venue.queue[0] : null;
+    let newQueue = [];
+
+    if (currentlyPlaying) {
+        newQueue.push(currentlyPlaying);
+    }
+    
+    newQueue.push(...venue.queue.filter((track, index) => index > 0 && !track.isBackgroundTrack));
+    newQueue.push(newTrack);
+
+    venue.queue = newQueue;
     venue.trackCooldowns.set(trackId, now + TRACK_COOLDOWN_MINUTES * 60 * 1000);
+    
     broadcastQueueUpdate(venueId);
     console.log(`Track "${newTrack.title}" added for venue ${venueId}. Queue updated.`);
     res.status(201).json({ success: true, message: 'Трек добавлен в очередь!', queue: venue.queue });
 });
+
 app.post('/track/next', (req, res) => {
     const { venueId } = req.body;
     if (!venueId || !venueQueues[venueId]) {
         return res.status(400).json({ error: 'venueId is required or invalid' });
     }
     const venue = venueQueues[venueId];
+
     if (venue.queue.length > 0) {
         const finishedTrack = venue.queue.shift();
         venue.history.unshift(finishedTrack);
@@ -180,10 +187,13 @@ app.post('/track/next', (req, res) => {
         }
         console.log(`Track "${finishedTrack.title}" finished. Moved to history for venue ${venueId}.`);
     }
-    ensureSufficientBackgroundTracks(venueId); // Используем новую функцию
+    
+    ensureSufficientBackgroundTracks(venueId);
+    
     broadcastQueueUpdate(venueId);
     res.status(200).json({ success: true, nextTrack: venue.queue[0] || null });
 });
+
 app.post('/track/previous', (req, res) => {
     const { venueId } = req.body;
     if (!venueId || !venueQueues[venueId]) {
@@ -216,7 +226,12 @@ async function startServer() {
             trackUrl: track.url,
             coverUrl: track.coverUrl || null
         }));
-        console.log(`Loaded ${backgroundPlaylist.length} tracks into memory.`);
+        // Перемешиваем плейлист для случайного старта
+        for (let i = backgroundPlaylist.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [backgroundPlaylist[i], backgroundPlaylist[j]] = [backgroundPlaylist[j], backgroundPlaylist[i]];
+        }
+        console.log(`Loaded and shuffled ${backgroundPlaylist.length} tracks into memory.`);
         server.listen(port, '0.0.0.0', () => {
             console.log(`Server running on port: ${port}`);
         });
