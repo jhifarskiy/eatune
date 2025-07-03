@@ -38,7 +38,6 @@ function broadcastQueueUpdate(venueId) {
     }
 }
 
-// ИЗМЕНЕНИЕ: Функция теперь проверяет кулдаун треков
 function ensureSufficientBackgroundTracks(venueId) {
     const venue = venueQueues[venueId];
     if (!venue || backgroundPlaylist.length === 0) return;
@@ -50,7 +49,7 @@ function ensureSufficientBackgroundTracks(venueId) {
     if (tracksToAdd <= 0) return;
     
     let currentTrackIndex = venue.backgroundTrackIndex || 0;
-    let safeguard = backgroundPlaylist.length; // Защита от бесконечного цикла
+    let safeguard = backgroundPlaylist.length;
 
     while (tracksToAdd > 0 && safeguard > 0) {
         const nextTrack = backgroundPlaylist[currentTrackIndex];
@@ -165,7 +164,7 @@ app.post('/queue', async (req, res) => {
     newQueue.push(newTrack);
 
     venue.queue = newQueue;
-    venue.trackCooldowns.set(trackId, now + TRACK_COOLDOWN_MINUTES * 60 * 1000);
+    // ИЗМЕНЕНИЕ: Убрана установка кулдауна отсюда
     
     broadcastQueueUpdate(venueId);
     console.log(`Track "${newTrack.title}" added for venue ${venueId}. Queue updated.`);
@@ -181,11 +180,16 @@ app.post('/track/next', (req, res) => {
 
     if (venue.queue.length > 0) {
         const finishedTrack = venue.queue.shift();
+        
+        // ИЗМЕНЕНИЕ: Установка кулдауна перенесена сюда.
+        // Кулдаун устанавливается, только когда трек ЗАКОНЧИЛСЯ.
+        venue.trackCooldowns.set(finishedTrack.id, Date.now() + TRACK_COOLDOWN_MINUTES * 60 * 1000);
+
         venue.history.unshift(finishedTrack);
         if (venue.history.length > HISTORY_MAX_SIZE) {
             venue.history.pop();
         }
-        console.log(`Track "${finishedTrack.title}" finished. Moved to history for venue ${venueId}.`);
+        console.log(`Track "${finishedTrack.title}" finished and put on cooldown. Moved to history for venue ${venueId}.`);
     }
     
     ensureSufficientBackgroundTracks(venueId);
@@ -226,7 +230,7 @@ async function startServer() {
             trackUrl: track.url,
             coverUrl: track.coverUrl || null
         }));
-        // Перемешиваем плейлист для случайного старта
+        
         for (let i = backgroundPlaylist.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [backgroundPlaylist[i], backgroundPlaylist[j]] = [backgroundPlaylist[j], backgroundPlaylist[i]];
