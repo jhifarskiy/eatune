@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:flutter/material.dart';
@@ -81,7 +82,6 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
     );
   }
 
-  // ИЗМЕНЕНИЕ: Логика обработки ответа от API
   void _confirmTrackSelection(String id) async {
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
@@ -101,16 +101,16 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
     if (!mounted) return;
 
     if (response.success) {
+      // Добавляем трек в список "моих заказов"
+      MyOrdersManager.add(id);
       _showCustomSnackBar(context, response.message);
     } else {
-      // Проверяем, является ли ошибка ошибкой кулдауна
       if (response.message.startsWith('Вы сможете добавить трек')) {
         showDialog(
           context: context,
           builder: (context) => CooldownDialog(serverMessage: response.message),
         );
       } else {
-        // Показываем любую другую ошибку
         _showCustomSnackBar(context, response.message);
       }
     }

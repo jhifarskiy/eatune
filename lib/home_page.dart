@@ -45,7 +45,7 @@ class HomeContent extends StatelessWidget {
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: TrackListWidget(onTrackSelected: () {}),
+            child: TrackListWidget(),
           ),
         ),
       ],

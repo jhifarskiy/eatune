@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:eatune/managers/favorites_manager.dart';
+import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:flutter/material.dart';
@@ -136,6 +137,8 @@ class _SearchPageState extends State<SearchPage> {
     if (!mounted) return;
 
     if (response.success) {
+      // Добавляем трек в список "моих заказов"
+      MyOrdersManager.add(id);
       _showCustomSnackBar(context, response.message);
     } else {
       if (response.message.startsWith('Вы сможете добавить трек')) {

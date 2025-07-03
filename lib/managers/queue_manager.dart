@@ -1,10 +1,8 @@
-// lib/managers/queue_manager.dart
-
 import 'dart:convert';
+import 'package:eatune/api.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import '../models/track_model.dart'; // <--- ИЗМЕНЕНИЕ
 
 class QueueManager extends ChangeNotifier {
   static final QueueManager _instance = QueueManager._internal();
@@ -14,70 +12,79 @@ class QueueManager extends ChangeNotifier {
   WebSocketChannel? _channel;
   List<Track> _queue = [];
   bool _isConnected = false;
-  bool _isConnecting = false;
+
+  // ИЗМЕНЕНИЕ: Добавлен Notifier для хранения реального времени трека
+  final ValueNotifier<Duration> currentTrackProgress = ValueNotifier(
+    Duration.zero,
+  );
 
   List<Track> get queue => _queue;
   bool get isConnected => _isConnected;
-  bool get isConnecting => _isConnecting;
 
   Future<void> connect() async {
-    if (_isConnected || _isConnecting) return;
+    if (_isConnected && _channel != null) return;
 
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
-      print("QueueManager: Нет активной сессии, подключение невозможно.");
+      print("QueueManager: No active venue session, can't connect.");
       return;
     }
 
     final wsUrl = Uri.parse('wss://eatune-api.onrender.com?venueId=$venueId');
 
     try {
-      _isConnecting = true;
-      notifyListeners();
-
       _channel = WebSocketChannel.connect(wsUrl);
-      print("QueueManager: Подключение к $wsUrl");
-
-      await _channel!.ready;
-
       _isConnected = true;
-      _isConnecting = false;
-      print("QueueManager: WebSocket подключен.");
+      print("QueueManager: Connecting to $wsUrl");
       notifyListeners();
 
       _channel!.stream.listen(
         (message) {
           final data = json.decode(message);
+
+          // Обработка обновления всей очереди
           if (data['type'] == 'queue_update') {
             final List<dynamic> trackData = data['queue'] ?? [];
             _queue = trackData.map((json) => Track.fromJson(json)).toList();
+            // При обновлении очереди сбрасываем прогресс
+            currentTrackProgress.value = Duration.zero;
+            print("QueueManager: Queue updated with ${_queue.length} tracks.");
             notifyListeners();
+          }
+
+          // ИЗМЕНЕНИЕ: Обработка сообщения о прогрессе
+          if (data['type'] == 'current_track_progress') {
+            final double currentTimeSeconds =
+                (data['currentTime'] as num?)?.toDouble() ?? 0.0;
+            currentTrackProgress.value = Duration(
+              milliseconds: (currentTimeSeconds * 1000).round(),
+            );
           }
         },
         onDone: () {
           _isConnected = false;
-          _isConnecting = false;
+          currentTrackProgress.value = Duration.zero;
+          print("QueueManager: WebSocket disconnected.");
           notifyListeners();
         },
         onError: (error) {
           _isConnected = false;
-          _isConnecting = false;
+          currentTrackProgress.value = Duration.zero;
+          print("QueueManager: WebSocket error: $error");
           notifyListeners();
         },
       );
     } catch (e) {
-      _isConnected = false;
-      _isConnecting = false;
-      notifyListeners();
+      print("QueueManager: Failed to connect: $e");
     }
   }
 
   void disconnect() {
     _channel?.sink.close();
-    _channel = null;
     _isConnected = false;
-    _isConnecting = false;
     _queue = [];
+    currentTrackProgress.value = Duration.zero;
+    print("QueueManager: Disconnected manually.");
     notifyListeners();
   }
 }

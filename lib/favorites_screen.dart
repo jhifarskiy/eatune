@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'managers/favorites_manager.dart';
 
 // Функция для отображения кастомного SnackBar
 void _showCustomSnackBar(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).hideCurrentSnackBar();
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(
@@ -79,6 +81,8 @@ class FavoritesScreen extends StatelessWidget {
     );
     if (context.mounted) {
       if (response.success) {
+        // Добавляем трек в список "моих заказов"
+        MyOrdersManager.add(id);
         _showCustomSnackBar(context, response.message);
       } else {
         if (response.message.startsWith('Вы сможете добавить трек')) {
@@ -106,9 +110,9 @@ class FavoritesScreen extends StatelessWidget {
             children: [
               Text(
                 'FAVORITE LIST',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 13,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 1.5,
                 ),

@@ -1,8 +1,159 @@
+import 'dart:async';
+import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/queue_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'api.dart';
 
+// Карточка для трека, который играет сейчас
+class _NowPlayingCard extends StatefulWidget {
+  final Track track;
+
+  const _NowPlayingCard({required this.track});
+
+  @override
+  State<_NowPlayingCard> createState() => _NowPlayingCardState();
+}
+
+class _NowPlayingCardState extends State<_NowPlayingCard> {
+  Duration _trackDuration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _trackDuration = _parseDuration(widget.track.duration);
+  }
+
+  @override
+  void didUpdateWidget(covariant _NowPlayingCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Если трек сменился, обновляем его общую длительность
+    if (widget.track.id != oldWidget.track.id) {
+      setState(() {
+        _trackDuration = _parseDuration(widget.track.duration);
+      });
+    }
+  }
+
+  Duration _parseDuration(String? d) {
+    if (d == null) return Duration.zero;
+    try {
+      final parts = d.split(':');
+      final minutes = int.parse(parts[0]);
+      final seconds = int.parse(parts[1]);
+      return Duration(minutes: minutes, seconds: seconds);
+    } catch (e) {
+      return Duration.zero;
+    }
+  }
+
+  String _formatDuration(Duration d) {
+    if (d.isNegative) return "0:00";
+    final minutes = d.inMinutes.remainder(60);
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Получаем доступ к QueueManager
+    final queueManager = context.read<QueueManager>();
+
+    return Card(
+      color: const Color(0xFF173D7A).withOpacity(0.5),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                _buildCoverImage(widget.track.coverUrl, 64, 12),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.track.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.track.artist,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.7),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // ИЗМЕНЕНИЕ: Используем ValueListenableBuilder для прогресса
+            ValueListenableBuilder<Duration>(
+              valueListenable: queueManager.currentTrackProgress,
+              builder: (context, currentPosition, child) {
+                final double progress = (_trackDuration.inSeconds > 0)
+                    ? (currentPosition.inSeconds / _trackDuration.inSeconds)
+                          .clamp(0.0, 1.0)
+                    : 0.0;
+                return Column(
+                  children: [
+                    SizedBox(
+                      height: 4,
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Colors.white,
+                        ),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _formatDuration(currentPosition),
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          _formatDuration(_trackDuration),
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Основной виджет экрана
 class QueuePage extends StatelessWidget {
   const QueuePage({super.key});
 
@@ -10,12 +161,6 @@ class QueuePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<QueueManager>(
       builder: (context, queueManager, child) {
-        if (queueManager.isConnecting) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          );
-        }
-
         if (!queueManager.isConnected) {
           return _buildConnectionErrorState(context, queueManager);
         }
@@ -32,10 +177,10 @@ class QueuePage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(24, 10, 24, 85),
           children: [
             _buildSectionTitle('Сейчас играет'),
-            _buildNowPlayingCard(nowPlaying),
+            _NowPlayingCard(track: nowPlaying),
             if (upNext.isNotEmpty) ...[
               const SizedBox(height: 24),
-              _buildSectionTitle('Далее'),
+              _buildSectionTitle('Далее в очереди'),
               ...upNext
                   .map(
                     (track) =>
@@ -50,68 +195,26 @@ class QueuePage extends StatelessWidget {
   }
 }
 
-// --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ, ВЫНЕСЕННЫЕ ИЗ КЛАССА ---
+// --- ВСПОМОГАТЕЛЬНЫЕ ВИДЖЕТЫ И ФУНКЦИИ ---
 
 Widget _buildSectionTitle(String title) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 12.0, top: 16.0),
     child: Text(
       title.toUpperCase(),
-      style: TextStyle(
-        color: Colors.white.withOpacity(0.5),
-        fontWeight: FontWeight.bold,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
         letterSpacing: 1.5,
-        fontSize: 12,
-      ),
-    ),
-  );
-}
-
-Widget _buildNowPlayingCard(Track track) {
-  return Card(
-    color: const Color(0xFF173D7A).withOpacity(0.5),
-    elevation: 0,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    child: Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        children: [
-          _buildCoverImage(track.coverUrl, 64, 12),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  track.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  track.artist,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withOpacity(0.7),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     ),
   );
 }
 
 Widget _buildQueueItem(Track track, int position) {
+  final bool isMyOrder = MyOrdersManager.isMyOrder(track.id);
+
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 8.0),
     child: Row(
@@ -150,6 +253,13 @@ Widget _buildQueueItem(Track track, int position) {
             ],
           ),
         ),
+        if (isMyOrder) ...[
+          const SizedBox(width: 8),
+          const Tooltip(
+            message: 'Ваш выбор',
+            child: Icon(Icons.check_circle, color: Color(0xFF1CA4FF), size: 20),
+          ),
+        ],
       ],
     ),
   );

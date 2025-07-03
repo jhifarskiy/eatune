@@ -39,7 +39,7 @@
             </div>
           </div>
           <div class="flex justify-center items-center space-x-6">
-            <button id="prevBtn" class="text-gray-500 hover:text-white transition">
+            <button id="prevBtn" class="text-gray-400 hover:text-white transition">
               <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M15.28 4.22a.75.75 0 0 0-1.06 0L8.5 9.94V5.75a.75.75 0 0 0-1.5 0v8.5a.75.75 0 0 0 1.5 0V11.56l5.72 5.72a.75.75 0 1 0 1.06-1.06L10.06 10l5.22-5.22a.75.75 0 0 0 0-1.06Z"/>
               </svg>
@@ -66,7 +66,7 @@
         <h2 class="text-xl font-semibold text-white mb-4 flex-shrink-0">Очередь</h2>
         <div class="overflow-y-auto">
           <ul id="queueList" class="space-y-3">
-             </ul>
+          </ul>
         </div>
       </div>
     </div>
@@ -122,6 +122,7 @@
       let currentTrackId = null;
       let venueId = null;
       let ws = null;
+      let lastProgressSentTime = 0; // ИЗМЕНЕНИЕ: для ограничения частоты отправок
 
       function connect() {
         venueId = venueIdInput.value.trim();
@@ -155,7 +156,7 @@
                         currentTrackId = currentTrack?.id;
                         updatePlayerUI(currentTrack);
                     }
-                    updateQueueUI(queue.slice(1)); // Обновляем очередь без текущего трека
+                    updateQueueUI(queue.slice(1));
                 }
             } catch (e) {
                 console.error("Failed to parse server message:", e);
@@ -181,36 +182,27 @@
           audioPlayer.pause();
           currentTrackId = null;
           try {
-              const response = await fetch('/track/next', { 
+              await fetch('/track/next', { 
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ venueId: venueId }) 
               });
-              await response.json();
           } catch(e) {
               console.error("Failed to request next track:", e);
           }
       }
       
-      // Было:
-// function prevTrack() {
-//   alert('Функция "Предыдущий трек" не поддерживается сервером.');
-// }
-
-// Стало:
-async function prevTrack() {
-    try {
-        const response = await fetch('/track/previous', { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ venueId: venueId }) 
-        });
-        await response.json();
-        // Сервер сам пришлет обновление очереди через WebSocket
-    } catch(e) {
-        console.error("Failed to request previous track:", e);
-    }
-}
+      async function prevTrack() {
+        try {
+            await fetch('/track/previous', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ venueId: venueId }) 
+            });
+        } catch(e) {
+            console.error("Failed to request previous track:", e);
+        }
+      }
 
       function updatePlayerUI(track) {
         if (track && track.id) {
@@ -230,7 +222,6 @@ async function prevTrack() {
         }
       }
 
-      // ИЗМЕНЕНИЕ: Добавлены иконки для разделения треков
       function updateQueueUI(queue) {
         if (Array.isArray(queue) && queue.length > 0) {
           queueContainer.classList.remove('hidden');
@@ -288,7 +279,23 @@ async function prevTrack() {
           audioPlayer.currentTime = newTime;
         }
       });
-      audioPlayer.addEventListener('timeupdate', updateProgress);
+      
+      // ИЗМЕНЕНИЕ: Отправляем прогресс на сервер
+      audioPlayer.addEventListener('timeupdate', () => {
+        updateProgress(); // Обновляем локальный UI
+        const now = Date.now();
+        // Отправляем сообщение не чаще, чем раз в секунду
+        if (ws && ws.readyState === WebSocket.OPEN && now - lastProgressSentTime > 1000) {
+            lastProgressSentTime = now;
+            const message = {
+                type: 'progress_update',
+                currentTime: audioPlayer.currentTime,
+                venueId: venueId
+            };
+            ws.send(JSON.stringify(message));
+        }
+      });
+
       audioPlayer.addEventListener('loadedmetadata', updateProgress);
 
       function formatTime(s) {
