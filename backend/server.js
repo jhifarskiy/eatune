@@ -1,23 +1,21 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { WebSocketServer } = require('ws');
-const { MongoClient, ObjectId } = require('mongodb');
-
-const app = express();
-const port = process.env.PORT || 3000;
+const { MongoClient } = require('mongodb');
 
 // --- НАСТРОЙКИ ---
+const app = express();
+const port = process.env.PORT || 3000;
 const mongoUri = process.env.MONGO_URI || "mongodb+srv://jhifarskiy:83leva35@eatune.8vrsmid.mongodb.net/?retryWrites=true&w=majority&appName=Eatune";
 const client = new MongoClient(mongoUri);
 const dbName = 'eatune';
-const collectionName = 'tracks';
-let tracksCollection;
 
-const USER_TRACK_COOLDOWN = 5 * 60 * 1000; // 5 минут в миллисекундах
+const TRACK_COOLDOWN_MINUTES = 15;
+const HISTORY_MAX_SIZE = 30; // Ограничиваем размер истории
 
+// --- Мидлвары и сервер ---
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -25,52 +23,65 @@ app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// --- НОВАЯ СИСТЕМА ОЧЕРЕДЕЙ ---
-let venueQueues = {}; // { venueId: { queue: [], listeners: Set, backgroundTrackIndex: 0, lastUserAddTimestamp: 0 } }
-let backgroundPlaylist = []; // Глобальный плейлист из всех треков в БД
+// --- УПРАВЛЕНИЕ ОЧЕРЕДЯМИ ---
+let venueQueues = {}; // { venueId: { queue: [], history: [], listeners: Set, ... } }
+let backgroundPlaylist = [];
 
-// Функция для добавления трека из фонового плейлиста, если очередь пуста
-function ensureQueueHasTrack(venueId) {
-    if (!venueQueues[venueId] || venueQueues[venueId].queue.length > 0) {
-        return; 
+/**
+ * Оповещает всех клиентов заведения об обновлении очереди
+ * @param {string} venueId
+ */
+function broadcastQueueUpdate(venueId) {
+    if (venueQueues[venueId]) {
+        const message = JSON.stringify({ type: 'queue_update', queue: venueQueues[venueId].queue });
+        venueQueues[venueId].listeners.forEach(client => {
+            if (client.readyState === client.OPEN) {
+                client.send(message);
+            }
+        });
     }
-    
-    if (backgroundPlaylist.length === 0) {
-        console.log(`Venue ${venueId}: Background playlist is empty, can't add a track.`);
+}
+
+/**
+ * Добавляет фоновый трек, если очередь пуста.
+ * @param {string} venueId
+ */
+function addBackgroundTrackIfNeeded(venueId) {
+    const venue = venueQueues[venueId];
+    if (!venue || venue.queue.length > 0 || backgroundPlaylist.length === 0) {
         return;
     }
 
-    let afrerackIndex = venueQueues[venueId].backgroundTrackIndex || 0;
+    let nextIndex = venue.backgroundTrackIndex || 0;
+    const nextTrack = backgroundPlaylist[nextIndex];
     
-    const nextTrack = backgroundPlaylist[afrerackIndex];
-    afrerackIndex = (afrerackIndex + 1) % backgroundPlaylist.length;
-    venueQueues[venueId].backgroundTrackIndex = afrerackIndex;
-    
-    venueQueues[venueId].queue.push({ ...nextTrack, isBackgroundTrack: true });
+    venue.backgroundTrackIndex = (nextIndex + 1) % backgroundPlaylist.length;
+    venue.queue.push({ ...nextTrack, isBackgroundTrack: true });
     
     console.log(`Venue ${venueId}: Queue was empty. Added background track: ${nextTrack.title}`);
 }
-
 
 // --- УПРАВЛЕНИЕ WEBSOCKETS ---
 wss.on('connection', (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const venueId = url.searchParams.get('venueId');
 
-    if (!venueId) {
-        ws.close();
-        return;
-    }
-
+    if (!venueId) return ws.close();
     console.log(`Player connected for venue: ${venueId}`);
 
     if (!venueQueues[venueId]) {
-        venueQueues[venueId] = { queue: [], listeners: new Set(), backgroundTrackIndex: 0, lastUserAddTimestamp: 0 };
+        venueQueues[venueId] = { 
+            queue: [], 
+            history: [], // НОВОЕ: Инициализация истории
+            listeners: new Set(), 
+            backgroundTrackIndex: 0, 
+            trackCooldowns: new Map() 
+        };
     }
     
     venueQueues[venueId].listeners.add(ws);
     
-    ensureQueueHasTrack(venueId);
+    addBackgroundTrackIfNeeded(venueId);
     broadcastQueueUpdate(venueId);
 
     ws.on('close', () => {
@@ -83,20 +94,7 @@ wss.on('connection', (ws, req) => {
     ws.on('error', console.error);
 });
 
-// Функция для оповещения всех плееров конкретного заведения
-function broadcastQueueUpdate(venueId) {
-    if (venueQueues[venueId]) {
-        const message = JSON.stringify({ type: 'queue_update', queue: venueQueues[venueId].queue });
-        venueQueues[venueId].listeners.forEach(client => {
-            if (client.readyState === client.OPEN) {
-                client.send(message);
-            }
-        });
-    }
-}
-
-
-// --- Маршруты API (ОБНОВЛЕННЫЕ) ---
+// --- API МАРШРУТЫ ---
 
 app.get('/tracks', (req, res) => {
     res.json(backgroundPlaylist);
@@ -109,72 +107,98 @@ app.post('/queue', async (req, res) => {
     }
 
     if (!venueQueues[venueId]) {
-        venueQueues[venueId] = { queue: [], listeners: new Set(), backgroundTrackIndex: 0, lastUserAddTimestamp: 0 };
+        venueQueues[venueId] = { queue: [], history: [], listeners: new Set(), backgroundTrackIndex: 0, trackCooldowns: new Map() };
     }
-
+    const venue = venueQueues[venueId];
     const now = Date.now();
-    const lastAdd = venueQueues[venueId].lastUserAddTimestamp || 0;
-    const timeSinceLastAdd = now - lastAdd;
 
-    if (timeSinceLastAdd < USER_TRACK_COOLDOWN) {
-        const timeLeft = Math.ceil((USER_TRACK_COOLDOWN - timeSinceLastAdd) / 60000);
-        return res.status(429).json({ error: `Вы сможете добавить трек через ${timeLeft} мин.` });
+    if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
+        const timeLeft = Math.ceil((venue.trackCooldowns.get(trackId) - now) / 60000);
+        return res.status(429).json({ error: `Этот трек недавно играл. Попробуйте снова через ${timeLeft} мин.` });
     }
 
     const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
     if (!selectedTrack) {
         return res.status(404).json({ error: 'Track not found' });
     }
-        
-    const trackData = { ...selectedTrack, isBackgroundTrack: false, currentTime: 0, lastUpdate: now };
-    const currentQueue = venueQueues[venueId].queue;
+    
+    const newTrack = { ...selectedTrack, isBackgroundTrack: false };
 
-    if (currentQueue.find(t => t.id === trackData.id)) {
+    let newQueue = venue.queue.filter((track, index) => index === 0 || !track.isBackgroundTrack);
+    
+    if (newQueue.some(t => t.id === newTrack.id && !t.isBackgroundTrack)) {
         return res.status(409).json({ error: "Этот трек уже в очереди" });
     }
+
+    newQueue.push(newTrack);
+    venue.queue = newQueue;
+    venue.trackCooldowns.set(trackId, now + TRACK_COOLDOWN_MINUTES * 60 * 1000);
     
-    // ИЗМЕНЕНИЕ: Убрана сложная логика. Любой новый трек всегда добавляется в конец.
-    currentQueue.push(trackData);
-
-    venueQueues[venueId].lastUserAddTimestamp = now;
     broadcastQueueUpdate(venueId);
-
-    console.log(`Track "${trackData.title}" added to queue for venue ${venueId}.`);
-    res.status(201).json({ success: true, queue: currentQueue });
+    console.log(`Track "${newTrack.title}" added for venue ${venueId}. Queue updated.`);
+    res.status(201).json({ success: true, message: 'Трек добавлен в очередь!', queue: venue.queue });
 });
 
-
+// ИЗМЕНЕНИЕ: Теперь '/track/next' добавляет трек в историю
 app.post('/track/next', (req, res) => {
     const { venueId } = req.body;
-    if (!venueId) return res.status(400).json({ error: 'venueId is required' });
-
-    const venue = venueQueues[venueId];
-    if (venue && venue.queue.length > 0) {
-        const finishedTrack = venue.queue.shift();
-        console.log(`Track "${finishedTrack.title}" finished for venue ${venueId}.`);
-        
-        ensureQueueHasTrack(venueId);
-        broadcastQueueUpdate(venueId);
-        
-        res.status(200).json({ success: true, nextTrack: venue.queue[0] || null });
-    } else {
-        // Если по какой-то причине очередь оказалась пуста, все равно проверяем
-        if (venue) {
-             ensureQueueHasTrack(venueId);
-             broadcastQueueUpdate(venueId);
-        }
-        res.status(200).json({ success: true, nextTrack: venue?.queue[0] || null });
+    if (!venueId || !venueQueues[venueId]) {
+        return res.status(400).json({ error: 'venueId is required or invalid' });
     }
+    const venue = venueQueues[venueId];
+
+    if (venue.queue.length > 0) {
+        const finishedTrack = venue.queue.shift();
+        // Добавляем завершенный трек в начало истории
+        venue.history.unshift(finishedTrack);
+        // Ограничиваем размер истории
+        if (venue.history.length > HISTORY_MAX_SIZE) {
+            venue.history.pop();
+        }
+        console.log(`Track "${finishedTrack.title}" finished. Moved to history for venue ${venueId}.`);
+    }
+    
+    addBackgroundTrackIfNeeded(venueId);
+    broadcastQueueUpdate(venueId);
+    
+    res.status(200).json({ success: true, nextTrack: venue.queue[0] || null });
+});
+
+// НОВЫЙ МАРШРУТ: для кнопки "назад"
+app.post('/track/previous', (req, res) => {
+    const { venueId } = req.body;
+    if (!venueId || !venueQueues[venueId]) {
+        return res.status(400).json({ error: 'venueId is required or invalid' });
+    }
+    const venue = venueQueues[venueId];
+
+    // Проверяем, есть ли что-то в истории
+    if (venue.history.length === 0) {
+        return res.status(404).json({ error: 'No previous track in history.' });
+    }
+    
+    // Перемещаем текущий трек (если он есть) обратно в историю, чтобы избежать дублирования
+    if (venue.queue.length > 0) {
+        venue.history.unshift(venue.queue.shift());
+    }
+
+    // Берем последний проигранный трек из истории и ставим его в начало очереди
+    const trackToReplay = venue.history.shift();
+    venue.queue.unshift(trackToReplay);
+
+    broadcastQueueUpdate(venueId);
+    console.log(`Rewinding to previous track "${trackToReplay.title}" for venue ${venueId}.`);
+    res.status(200).json({ success: true, currentTrack: venue.queue[0] || null });
 });
 
 
-// --- Запуск сервера ---
+// --- ЗАПУСК СЕРВЕРА ---
 async function startServer() {
     try {
         await client.connect();
         console.log("Successfully connected to MongoDB Atlas!");
         const db = client.db(dbName);
-        tracksCollection = db.collection(collectionName);
+        const tracksCollection = db.collection('tracks');
         
         const tracksFromDb = await tracksCollection.find({}).toArray();
         backgroundPlaylist = tracksFromDb.map(track => ({
@@ -185,11 +209,10 @@ async function startServer() {
             trackUrl: track.url,
             coverUrl: track.coverUrl || null
         }));
-        console.log(`Loaded ${backgroundPlaylist.length} tracks into memory for background playlist.`);
+        console.log(`Loaded ${backgroundPlaylist.length} tracks into memory.`);
         
         server.listen(port, '0.0.0.0', () => {
-            console.log(`Server running on http://localhost:${port}`);
-            console.log(`Player available at http://localhost:${port}/player.html`);
+            console.log(`Server running on port: ${port}`);
         });
 
     } catch (error) {

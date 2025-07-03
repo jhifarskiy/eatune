@@ -2,6 +2,7 @@
 
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../models/track_model.dart'; // <--- ИЗМЕНЕНИЕм
 
 // НОВЫЙ КЛАСС для ответов от API
 class ApiResponse {

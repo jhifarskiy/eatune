@@ -1,9 +1,12 @@
+// lib/track_list_widget.dart
+
 import 'dart:ui';
-import 'package:eatune/managers/venue_session_manager.dart';
+import 'package:eatune/managers/queue_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
-import 'api.dart';
+import 'models/track_model.dart';
 import 'managers/favorites_manager.dart';
 
 class NoGlowScrollBehavior extends ScrollBehavior {
@@ -37,29 +40,8 @@ void _showCustomSnackBar(BuildContext context, String message) {
   );
 }
 
-class TrackListWidget extends StatefulWidget {
-  final Function onTrackSelected;
-
-  const TrackListWidget({super.key, required this.onTrackSelected});
-
-  @override
-  State<TrackListWidget> createState() => _TrackListWidgetState();
-}
-
-class _TrackListWidgetState extends State<TrackListWidget> {
-  late Future<List<Track>> futureTracks;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTracks();
-  }
-
-  void _loadTracks() {
-    setState(() {
-      futureTracks = ApiService.getAllTracks();
-    });
-  }
+class TrackListWidget extends StatelessWidget {
+  const TrackListWidget({super.key});
 
   void _showConfirmationModal(BuildContext context, Track track) {
     showGeneralDialog(
@@ -72,7 +54,26 @@ class _TrackListWidgetState extends State<TrackListWidget> {
         return _TrackConfirmationDialog(
           track: track,
           onConfirm: () {
-            _confirmTrackSelection(track.id);
+            // Вызываем метод из QueueManager через Provider
+            context.read<QueueManager>().addTrackToQueue(track.id).then((
+              response,
+            ) {
+              if (context.mounted) {
+                if (response.success) {
+                  _showCustomSnackBar(context, response.message);
+                } else {
+                  if (response.message.startsWith('Вы сможете добавить трек')) {
+                    showDialog(
+                      context: context,
+                      builder: (_) =>
+                          CooldownDialog(serverMessage: response.message),
+                    );
+                  } else {
+                    _showCustomSnackBar(context, response.message);
+                  }
+                }
+              }
+            });
             Navigator.of(context).pop();
           },
         );
@@ -92,149 +93,52 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     );
   }
 
-  void _confirmTrackSelection(String id) async {
-    final venueId = await VenueSessionManager.getActiveVenueId();
-    if (venueId == null) {
-      if (mounted) {
-        _showCustomSnackBar(
-          context,
-          'Ошибка сессии. Отсканируйте QR-код заново.',
-        );
-      }
-      return;
-    }
-
-    final ApiResponse response = await ApiService.addToQueue(
-      trackId: id,
-      venueId: venueId,
-    );
-    if (!mounted) return;
-
-    if (response.success) {
-      _showCustomSnackBar(context, response.message);
-      widget.onTrackSelected();
-    } else {
-      if (response.message.startsWith('Вы сможете добавить трек')) {
-        showDialog(
-          context: context,
-          builder: (context) => CooldownDialog(serverMessage: response.message),
-        );
-      } else {
-        _showCustomSnackBar(context, response.message);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Track>>(
-      future: futureTracks,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return ScrollConfiguration(
-            behavior: NoGlowScrollBehavior(),
-            child: Shimmer.fromColors(
-              baseColor: Colors.grey[850]!,
-              highlightColor: Colors.grey[800]!,
-              child: ListView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.zero,
-                itemCount: 10,
-                itemBuilder: (context, index) => const _TrackItemPlaceholder(),
-              ),
-            ),
-          );
-        }
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return Center(
-            child: Text(
-              'Нет доступных треков',
-              style: TextStyle(color: Colors.white.withOpacity(0.5)),
-            ),
-          );
-        }
+    // Получаем экземпляр менеджера
+    final queueManager = context.watch<QueueManager>();
 
-        final tracks = snapshot.data!;
-        return ScrollConfiguration(
-          behavior: NoGlowScrollBehavior(),
+    // Отображаем состояние загрузки
+    if (queueManager.isLoadingAllTracks) {
+      return ScrollConfiguration(
+        behavior: NoGlowScrollBehavior(),
+        child: Shimmer.fromColors(
+          baseColor: Colors.grey[850]!,
+          highlightColor: Colors.grey[800]!,
           child: ListView.builder(
+            physics: const NeverScrollableScrollPhysics(),
             padding: EdgeInsets.zero,
-            itemCount: tracks.length,
-            itemBuilder: (context, index) {
-              final track = tracks[index];
-              return _TrackListItem(
-                track: track,
-                onTap: () => _showConfirmationModal(context, track),
-              );
-            },
+            itemCount: 10,
+            itemBuilder: (context, index) => const _TrackItemPlaceholder(),
           ),
-        );
-      },
-    );
-  }
-}
+        ),
+      );
+    }
 
-class _TrackItemPlaceholder extends StatelessWidget {
-  const _TrackItemPlaceholder();
+    // Если треков нет
+    if (queueManager.allTracks.isEmpty) {
+      return Center(
+        child: Text(
+          'Нет доступных треков',
+          style: TextStyle(color: Colors.white.withOpacity(0.5)),
+        ),
+      );
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: double.infinity,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  width: 100,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Container(
-            width: 35,
-            height: 14,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Container(
-            width: 24,
-            height: 24,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ],
+    // Отображаем список треков
+    final tracks = queueManager.allTracks;
+    return ScrollConfiguration(
+      behavior: NoGlowScrollBehavior(),
+      child: ListView.builder(
+        padding: EdgeInsets.zero,
+        itemCount: tracks.length,
+        itemBuilder: (context, index) {
+          final track = tracks[index];
+          return _TrackListItem(
+            track: track,
+            onTap: () => _showConfirmationModal(context, track),
+          );
+        },
       ),
     );
   }

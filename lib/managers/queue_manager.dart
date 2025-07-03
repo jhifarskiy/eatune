@@ -1,10 +1,10 @@
 // lib/managers/queue_manager.dart
 
 import 'dart:convert';
-import 'package:eatune/api.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import '../models/track_model.dart'; // <--- ИЗМЕНЕНИЕ
 
 class QueueManager extends ChangeNotifier {
   static final QueueManager _instance = QueueManager._internal();

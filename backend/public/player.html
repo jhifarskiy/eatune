@@ -16,56 +16,69 @@
 
 <body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-4">
 
-  <div class="w-full max-w-md space-y-6">
-    <div id="player-container" class="p-6 sm:p-8 bg-gray-800 rounded-2xl shadow-2xl space-y-6 hidden">
-      <div class="aspect-square w-full rounded-lg shadow-lg overflow-hidden">
-        <img id="coverArt" src="https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune" alt="Обложка"
-          class="w-full h-full object-cover">
-      </div>
-      <div class="text-center space-y-2">
-        <h1 id="trackTitle" class="text-2xl font-bold truncate">Ожидание трека...</h1>
-        <p id="trackArtist" class="text-md text-gray-400">Очередь пуста</p>
-      </div>
-      <audio id="audioPlayer" controls class="hidden"></audio>
-      <div class="space-y-3">
-        <div class="w-full">
-          <div id="progressBarContainer" class="bg-gray-700 h-2 rounded-full w-full cursor-pointer">
-            <div id="progressBar" class="bg-green-500 h-2 rounded-full" style="width: 0%;"></div>
+  <div class="w-full max-w-4xl mx-auto">
+    <div id="main-interface" class="hidden grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div id="player-container" class="p-6 sm:p-8 bg-gray-800 rounded-2xl shadow-2xl space-y-6 flex flex-col justify-center">
+        <div class="aspect-square w-full max-w-sm mx-auto rounded-lg shadow-lg overflow-hidden">
+          <img id="coverArt" src="https://placehold.co/400x400/1F2937/FFFFFF?text=Eatune" alt="Обложка"
+            class="w-full h-full object-cover">
+        </div>
+        <div class="text-center space-y-2">
+          <h1 id="trackTitle" class="text-2xl font-bold truncate">Ожидание трека...</h1>
+          <p id="trackArtist" class="text-md text-gray-400">Очередь пуста</p>
+        </div>
+        <audio id="audioPlayer" controls class="hidden"></audio>
+        <div class="space-y-3">
+          <div class="w-full">
+            <div id="progressBarContainer" class="bg-gray-700 h-2 rounded-full w-full cursor-pointer">
+              <div id="progressBar" class="bg-green-500 h-2 rounded-full" style="width: 0%;"></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-400 mt-1">
+              <span id="currentTime">0:00</span>
+              <span id="totalDuration">0:00</span>
+            </div>
           </div>
-          <div class="flex justify-between text-xs text-gray-400 mt-1">
-            <span id="currentTime">0:00</span>
-            <span id="totalDuration">0:00</span>
+          <div class="flex justify-center items-center space-x-6">
+            <button id="prevBtn" class="text-gray-500 hover:text-white transition">
+              <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M15.28 4.22a.75.75 0 0 0-1.06 0L8.5 9.94V5.75a.75.75 0 0 0-1.5 0v8.5a.75.75 0 0 0 1.5 0V11.56l5.72 5.72a.75.75 0 1 0 1.06-1.06L10.06 10l5.22-5.22a.75.75 0 0 0 0-1.06Z"/>
+              </svg>
+            </button>
+            <button id="playPauseBtn"
+              class="bg-green-500 hover:bg-green-600 text-white w-16 h-16 rounded-full flex items-center justify-center transition shadow-lg">
+              <svg id="playIcon" class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M6.3 2.841A1.5 1.5 0 0 0 4 4.11V15.89a1.5 1.5 0 0 0 2.3 1.269l9.344-5.89a1.5 1.5 0 0 0 0-2.538L6.3 2.841Z" />
+              </svg>
+              <svg id="pauseIcon" class="w-8 h-8 hidden" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M5.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75A.75.75 0 0 0 7.25 3h-1.5ZM12.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75a.75.75 0 0 0-.75-.75h-1.5Z" />
+              </svg>
+            </button>
+            <button id="nextBtn" class="text-gray-400 hover:text-white transition">
+               <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20" style="transform: scaleX(-1);">
+                <path d="M15.28 4.22a.75.75 0 0 0-1.06 0L8.5 9.94V5.75a.75.75 0 0 0-1.5 0v8.5a.75.75 0 0 0 1.5 0V11.56l5.72 5.72a.75.75 0 1 0 1.06-1.06L10.06 10l5.22-5.22a.75.75 0 0 0 0-1.06Z"/>
+              </svg>
+            </button>
           </div>
         </div>
-        <div class="flex justify-center">
-          <button id="playPauseBtn"
-            class="bg-green-500 hover:bg-green-600 text-white w-16 h-16 rounded-full flex items-center justify-center transition shadow-lg">
-            <svg id="playIcon" class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                d="M6.3 2.841A1.5 1.5 0 0 0 4 4.11V15.89a1.5 1.5 0 0 0 2.3 1.269l9.344-5.89a1.5 1.5 0 0 0 0-2.538L6.3 2.841Z" />
-            </svg>
-            <svg id="pauseIcon" class="w-8 h-8 hidden" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                d="M5.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75A.75.75 0 0 0 7.25 3h-1.5ZM12.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75a.75.75 0 0 0-.75-.75h-1.5Z" />
-            </svg>
-          </button>
+      </div>
+
+      <div id="queue-container" class="bg-gray-800 rounded-2xl shadow-lg p-6 flex flex-col">
+        <h2 class="text-xl font-semibold text-white mb-4 flex-shrink-0">Очередь</h2>
+        <div class="overflow-y-auto">
+          <ul id="queueList" class="space-y-3">
+             </ul>
         </div>
       </div>
     </div>
 
-    <div id="queue-container" class="hidden bg-gray-800 rounded-2xl shadow-lg p-4 space-y-2">
-      <h2 class="text-lg font-semibold text-white mb-2">Скоро будут играть:</h2>
-      <ul id="queueList" class="space-y-2"></ul>
-    </div>
-
-    <div id="initial-state-container" class="text-center p-8 space-y-4">
+    <div id="initial-state-container" class="text-center p-8 space-y-4 max-w-md mx-auto">
       <div class="relative inline-block">
         <svg class="w-24 h-24 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
             d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2ZM21 16c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2Z">
           </path>
         </svg>
-        <div id="status-indicator" class="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-gray-800"></div>
+        <div id="status-indicator" class="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-gray-900"></div>
       </div>
       <h1 class="text-3xl font-bold">Eatune Player</h1>
       <p id="status-text" class="text-gray-400">Ожидание подключения...</p>
@@ -83,7 +96,8 @@
       const coverArt = document.getElementById('coverArt');
       const trackTitle = document.getElementById('trackTitle');
       const trackArtist = document.getElementById('trackArtist');
-      const playerContainer = document.getElementById('player-container');
+      
+      const mainInterface = document.getElementById('main-interface');
       const initialStateContainer = document.getElementById('initial-state-container');
       
       const connectBtn = document.getElementById('connectBtn');
@@ -94,10 +108,14 @@
       const playPauseBtn = document.getElementById('playPauseBtn');
       const playIcon = document.getElementById('playIcon');
       const pauseIcon = document.getElementById('pauseIcon');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+
       const progressBarContainer = document.getElementById('progressBarContainer');
       const progressBar = document.getElementById('progressBar');
       const currentTimeEl = document.getElementById('currentTime');
       const totalDurationEl = document.getElementById('totalDuration');
+      
       const queueContainer = document.getElementById('queue-container');
       const queueList = document.getElementById('queueList');
 
@@ -105,37 +123,28 @@
       let venueId = null;
       let ws = null;
 
-      // --- ИЗМЕНЕНИЕ: Логика подключения через WebSocket ---
-
       function connect() {
         venueId = venueIdInput.value.trim();
         if (!venueId) {
             statusText.textContent = 'Ошибка: ID заведения не может быть пустым.';
             return;
         }
-
-        // Формируем адрес для WebSocket
+        
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${window.location.host}?venueId=${venueId}`;
         
-        console.log(`Attempting to connect to ${wsUrl}`);
         statusText.textContent = `Подключение к ${venueId}...`;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = function() {
-            console.log('WebSocket connection established.');
             statusText.textContent = 'Подключено!';
             statusIndicator.classList.remove('bg-red-500');
             statusIndicator.classList.add('bg-green-500');
-            
-            // Прячем начальный экран и показываем плеер
             initialStateContainer.classList.add('hidden');
-            playerContainer.classList.remove('hidden');
+            mainInterface.classList.remove('hidden');
         };
         
-        // Главный обработчик сообщений от сервера
         ws.onmessage = function(event) {
-            console.log('Message from server: ', event.data);
             try {
                 const message = JSON.parse(event.data);
                 if (message.type === 'queue_update') {
@@ -146,7 +155,7 @@
                         currentTrackId = currentTrack?.id;
                         updatePlayerUI(currentTrack);
                     }
-                    updateQueueUI(queue.slice(1));
+                    updateQueueUI(queue.slice(1)); // Обновляем очередь без текущего трека
                 }
             } catch (e) {
                 console.error("Failed to parse server message:", e);
@@ -154,46 +163,55 @@
         };
 
         ws.onclose = function() {
-            console.log('WebSocket connection closed.');
             statusText.textContent = 'Соединение потеряно. Попробуйте снова.';
             statusIndicator.classList.remove('bg-green-500');
             statusIndicator.classList.add('bg-red-500');
-
-            // Возвращаем начальный экран
             initialStateContainer.classList.remove('hidden');
-            playerContainer.classList.add('hidden');
+            mainInterface.classList.add('hidden');
         };
 
         ws.onerror = function(error) {
-            console.error('WebSocket Error: ', error);
             statusText.textContent = 'Ошибка подключения.';
         };
       }
       
       connectBtn.addEventListener('click', connect);
 
-
-      // --- ИЗМЕНЕНИЕ: Обновленная функция для перехода к следующему треку ---
       async function nextTrack() {
-          console.log("Track ended. Requesting next track from server.");
           audioPlayer.pause();
           currentTrackId = null;
           try {
-              // Отправляем запрос на сдвиг очереди для нашего заведения
               const response = await fetch('/track/next', { 
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ venueId: venueId }) 
               });
-              const result = await response.json();
-              // После этого сервер сам пришлет новую очередь через WebSocket
-              console.log("Server response to next track:", result);
+              await response.json();
           } catch(e) {
               console.error("Failed to request next track:", e);
           }
       }
+      
+      // Было:
+// function prevTrack() {
+//   alert('Функция "Предыдущий трек" не поддерживается сервером.');
+// }
 
-      // Обновляет UI плеера
+// Стало:
+async function prevTrack() {
+    try {
+        const response = await fetch('/track/previous', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ venueId: venueId }) 
+        });
+        await response.json();
+        // Сервер сам пришлет обновление очереди через WebSocket
+    } catch(e) {
+        console.error("Failed to request previous track:", e);
+    }
+}
+
       function updatePlayerUI(track) {
         if (track && track.id) {
             trackTitle.textContent = track.title || 'Без названия';
@@ -212,41 +230,40 @@
         }
       }
 
-      // Обновляет UI списка очереди
+      // ИЗМЕНЕНИЕ: Добавлены иконки для разделения треков
       function updateQueueUI(queue) {
         if (Array.isArray(queue) && queue.length > 0) {
           queueContainer.classList.remove('hidden');
-          queueList.innerHTML = queue.map(track => `
-            <li class="bg-gray-700 px-4 py-2 rounded-lg flex items-center space-x-4">
-              <img src="${track.coverUrl || 'https://placehold.co/50x50/374151/FFFFFF?text=?'}" class="w-10 h-10 rounded-md">
-              <div class="flex-1 truncate">
-                <span class="text-sm font-medium block truncate">${track.title}</span>
-                <span class="text-xs text-gray-400 block truncate">${track.artist}</span>
-              </div>
-            </li>
-          `).join('');
+          queueList.innerHTML = queue.map(track => {
+              const isUserTrack = !track.isBackgroundTrack;
+              const icon = isUserTrack 
+                  ? `<svg title="Трек пользователя" class="w-5 h-5 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-5.5-2.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM10 12a5.99 5.99 0 0 0-4.793 2.39A6.483 6.483 0 0 0 10 16.5a6.483 6.483 0 0 0 4.793-2.11A5.99 5.99 0 0 0 10 12Z" clip-rule="evenodd" /></svg>` 
+                  : `<svg title="Трек из плейлиста" class="w-5 h-5 text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" /></svg>`;
+              
+              return `
+                <li class="bg-gray-700/50 px-4 py-2 rounded-lg flex items-center space-x-4">
+                  <img src="${track.coverUrl || 'https://placehold.co/50x50/374151/FFFFFF?text=?'}" class="w-10 h-10 rounded-md flex-shrink-0">
+                  <div class="flex-1 truncate">
+                    <p class="text-sm font-medium block truncate text-white">${track.title}</p>
+                    <p class="text-xs text-gray-400 block truncate">${track.artist}</p>
+                  </div>
+                  ${icon}
+                </li>
+              `;
+          }).join('');
         } else {
-          queueContainer.classList.add('hidden');
-          queueList.innerHTML = '';
+          queueList.innerHTML = '<li class="text-gray-500 text-center py-4">Очередь пуста</li>';
         }
       }
 
+      playPauseBtn.addEventListener('click', () => audioPlayer.paused ? audioPlayer.play() : audioPlayer.pause());
+      nextBtn.addEventListener('click', nextTrack);
+      prevBtn.addEventListener('click', prevTrack);
 
-      // --- УПРАВЛЕНИЕ ВОСПРОИЗВЕДЕНИЕМ ---
-      playPauseBtn.addEventListener('click', () =>
-        audioPlayer.paused ? audioPlayer.play() : audioPlayer.pause()
-      );
-      audioPlayer.onplay = () => {
-        playIcon.classList.add('hidden');
-        pauseIcon.classList.remove('hidden');
-      };
-      audioPlayer.onpause = () => {
-        playIcon.classList.remove('hidden');
-        pauseIcon.classList.add('hidden');
-      };
+      audioPlayer.onplay = () => { playIcon.classList.add('hidden'); pauseIcon.classList.remove('hidden'); };
+      audioPlayer.onpause = () => { playIcon.classList.remove('hidden'); pauseIcon.classList.add('hidden'); };
       audioPlayer.addEventListener('ended', nextTrack);
 
-      // --- ИНДИКАТОР ВЫПОЛНЕНИЯ ---
       function updateProgress() {
           const duration = audioPlayer.duration;
           const currentTime = audioPlayer.currentTime;
@@ -283,5 +300,4 @@
     });
   </script>
 </body>
-
 </html>
