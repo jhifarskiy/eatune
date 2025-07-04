@@ -62,10 +62,10 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
         return _TrackConfirmationDialog(
           track: track,
           onConfirm: () {
-            // Закрываем диалог подтверждения ПЕРЕД отправкой запроса
             Navigator.of(context).pop();
-            // Отправляем запрос
-            _confirmTrackSelection(track.id);
+            _confirmTrackSelection(
+              track.id,
+            ); // ИСПРАВЛЕНИЕ: Не передаем контекст
           },
         );
       },
@@ -85,14 +85,14 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
   }
 
   void _confirmTrackSelection(String id) async {
+    // ИСПРАВЛЕНИЕ: Не принимаем контекст
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
-      if (mounted) {
-        _showCustomSnackBar(
-          context,
-          'Ошибка сессии. Отсканируйте QR-код заново.',
-        );
-      }
+      if (!mounted) return;
+      _showCustomSnackBar(
+        context,
+        'Ошибка сессии. Отсканируйте QR-код заново.',
+      );
       return;
     }
 
@@ -100,13 +100,13 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
       trackId: id,
       venueId: venueId,
     );
+
     if (!mounted) return;
 
     if (response.success) {
       MyOrdersManager.add(id);
       _showCustomSnackBar(context, response.message);
     } else {
-      // ИЗМЕНЕНИЕ: Улучшенная логика обработки ошибок
       if (response.cooldownType != null && response.timeLeftSeconds != null) {
         showDialog(
           context: context,
@@ -447,7 +447,6 @@ class __ConfirmAddButtonState extends State<_ConfirmAddButton> {
   void _handleAdd() {
     if (_isAdding || _isAdded) return;
     setState(() => _isAdding = true);
-    // ИЗМЕНЕНИЕ: Убираем задержку
     widget.onConfirm();
     Future.delayed(const Duration(milliseconds: 1200), () {
       if (mounted) {

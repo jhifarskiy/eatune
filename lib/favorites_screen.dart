@@ -7,31 +7,41 @@ import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 import 'managers/favorites_manager.dart';
 
-void _showCustomSnackBar(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        message,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-      ),
-      backgroundColor: const Color(0xFF1885D3),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50.0)),
-      margin: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
-      duration: const Duration(milliseconds: 1500),
-    ),
-  );
-}
-
-class FavoritesScreen extends StatelessWidget {
+class FavoritesScreen extends StatefulWidget {
+  // ИСПРАВЛЕНИЕ: Преобразуем в StatefulWidget
   const FavoritesScreen({super.key});
 
-  void _showConfirmationModal(BuildContext context, Track track) {
+  @override
+  State<FavoritesScreen> createState() => _FavoritesScreenState();
+}
+
+class _FavoritesScreenState extends State<FavoritesScreen> {
+  // ИСПРАВЛЕНИЕ: Создаем State
+  void _showCustomSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: const Color(0xFF1885D3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(50.0),
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
+        duration: const Duration(milliseconds: 1500),
+      ),
+    );
+  }
+
+  void _showConfirmationModal(Track track) {
+    // ИСПРАВЛЕНИЕ: Контекст берется из State
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -43,7 +53,7 @@ class FavoritesScreen extends StatelessWidget {
           track: track,
           onConfirm: () {
             Navigator.of(context).pop();
-            _confirmTrackSelection(context, track.id);
+            _confirmTrackSelection(track.id);
           },
         );
       },
@@ -62,15 +72,15 @@ class FavoritesScreen extends StatelessWidget {
     );
   }
 
-  void _confirmTrackSelection(BuildContext context, String id) async {
+  void _confirmTrackSelection(String id) async {
+    // ИСПРАВЛЕНИЕ: Контекст берется из State
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
-      if (context.mounted) {
-        _showCustomSnackBar(
-          context,
-          'Ошибка сессии. Отсканируйте QR-код заново.',
-        );
-      }
+      if (!mounted) return;
+      _showCustomSnackBar(
+        context,
+        'Ошибка сессии. Отсканируйте QR-код заново.',
+      );
       return;
     }
 
@@ -78,22 +88,21 @@ class FavoritesScreen extends StatelessWidget {
       trackId: id,
       venueId: venueId,
     );
-    if (context.mounted) {
-      if (response.success) {
-        MyOrdersManager.add(id);
-        _showCustomSnackBar(context, response.message);
+
+    if (!mounted) return;
+
+    if (response.success) {
+      MyOrdersManager.add(id);
+      _showCustomSnackBar(context, response.message);
+    } else {
+      if (response.cooldownType != null && response.timeLeftSeconds != null) {
+        showDialog(
+          context: context,
+          builder: (context) =>
+              CooldownDialog(initialCooldownSeconds: response.timeLeftSeconds!),
+        );
       } else {
-        // ИСПРАВЛЕНИЕ: Используем новую логику обработки ошибок
-        if (response.cooldownType != null && response.timeLeftSeconds != null) {
-          showDialog(
-            context: context,
-            builder: (context) => CooldownDialog(
-              initialCooldownSeconds: response.timeLeftSeconds!,
-            ),
-          );
-        } else {
-          _showCustomSnackBar(context, response.message);
-        }
+        _showCustomSnackBar(context, response.message);
       }
     }
   }
@@ -158,7 +167,7 @@ class FavoritesScreen extends StatelessWidget {
                     itemBuilder: (context, index) {
                       final track = favoriteTracks[index];
                       return _AnimatedTrackItem(
-                        onTap: () => _showConfirmationModal(context, track),
+                        onTap: () => _showConfirmationModal(track),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Row(

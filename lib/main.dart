@@ -7,11 +7,15 @@ import 'package:eatune/venue_scan_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'home_page.dart';
+import 'package:eatune/managers/device_id_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await DeviceIdManager.init();
+
   await FavoritesManager.init();
   final String? activeVenueId = await VenueSessionManager.getActiveVenueId();
+  await FavoritesManager.init();
 
   final queueManager = QueueManager();
   if (activeVenueId != null) {

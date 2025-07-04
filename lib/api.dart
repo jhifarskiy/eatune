@@ -2,13 +2,14 @@
 
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'managers/device_id_manager.dart'; // <-- Добавьте импорт
 
+// ... (class ApiResponse и class Track без изменений) ...
 class ApiResponse {
   final bool success;
   final String message;
-  // ИЗМЕНЕНИЕ: Добавляем новые поля для детальной информации о кулдауне
-  final String? cooldownType; // 'user' или 'track'
-  final int? timeLeftSeconds; // Оставшееся время в секундах
+  final String? cooldownType;
+  final int? timeLeftSeconds;
 
   ApiResponse({
     required this.success,
@@ -65,6 +66,7 @@ class Track {
 class ApiService {
   static const String baseUrl = 'https://eatune-api.onrender.com';
 
+  // ... (getAllTracks, getCurrentTrack, getQueue без изменений) ...
   static Future<List<Track>> getAllTracks() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/tracks'));
@@ -82,30 +84,39 @@ class ApiService {
     required String trackId,
     required String venueId,
   }) async {
+    // ИЗМЕНЕНИЕ: Получаем ID устройства
+    final deviceId = DeviceIdManager.id;
+    if (deviceId == null) {
+      return ApiResponse(
+        success: false,
+        message: 'Ошибка идентификации устройства.',
+      );
+    }
+
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/queue'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'id': trackId, 'venueId': venueId}),
+        // ИЗМЕНЕНИЕ: Добавляем deviceId в тело запроса
+        body: json.encode({
+          'id': trackId,
+          'venueId': venueId,
+          'deviceId': deviceId,
+        }),
       );
 
       final body = json.decode(response.body);
 
       if (response.statusCode == 201) {
         return ApiResponse(success: true, message: 'Трек добавлен в очередь!');
-      }
-      // ИЗМЕНЕНИЕ: Улучшаем обработку ошибок
-      else if (response.statusCode == 429) {
-        // 429 - Too Many Requests (для кулдаунов)
+      } else if (response.statusCode == 429) {
         return ApiResponse(
           success: false,
           message: body['error'] ?? 'Достигнут лимит запросов.',
-          // Извлекаем новые поля из ответа сервера
           cooldownType: body['cooldownType'],
           timeLeftSeconds: (body['timeLeftSeconds'] as num?)?.toInt(),
         );
       } else {
-        // Для всех остальных ошибок (409, 400, 500 и т.д.)
         return ApiResponse(
           success: false,
           message: body['error']?.toString() ?? 'Не удалось добавить трек',

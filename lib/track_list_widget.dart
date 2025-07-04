@@ -33,10 +33,10 @@ class _TrackListWidgetState extends State<TrackListWidget> {
         return TrackConfirmationDialog(
           track: track,
           onConfirm: () {
-            // Закрываем диалог подтверждения ПЕРЕД отправкой запроса
             Navigator.of(context).pop();
-            // Отправляем запрос
-            _confirmTrackSelection(context, track.id);
+            _confirmTrackSelection(
+              track.id,
+            ); // ИСПРАВЛЕНИЕ: Не передаем контекст
           },
         );
       },
@@ -55,15 +55,15 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     );
   }
 
-  void _confirmTrackSelection(BuildContext context, String id) async {
+  void _confirmTrackSelection(String id) async {
+    // ИСПРАВЛЕНИЕ: Не принимаем контекст
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
-      if (mounted) {
-        _showCustomSnackBar(
-          context,
-          'Ошибка сессии. Отсканируйте QR-код заново.',
-        );
-      }
+      if (!mounted) return;
+      _showCustomSnackBar(
+        context,
+        'Ошибка сессии. Отсканируйте QR-код заново.',
+      );
       return;
     }
 
@@ -72,33 +72,21 @@ class _TrackListWidgetState extends State<TrackListWidget> {
       venueId: venueId,
     );
 
-    // --- ДОБАВЬТЕ ЭТОТ БЛОК ДЛЯ ДИАГНОСТИКИ ---
-    print('--- API RESPONSE RECEIVED ---');
-    print('Success: ${response.success}');
-    print('Message: ${response.message}');
-    print('Cooldown Type: ${response.cooldownType}');
-    print('Time Left (s): ${response.timeLeftSeconds}');
-    print('-----------------------------');
-    // ------------------------------------------
+    // ИСПРАВЛЕНИЕ: Проверяем `mounted` перед использованием `context`
+    if (!mounted) return;
 
-    if (mounted) {
-      if (response.success) {
-        MyOrdersManager.add(id);
-        _showCustomSnackBar(context, response.message);
+    if (response.success) {
+      MyOrdersManager.add(id);
+      _showCustomSnackBar(context, response.message);
+    } else {
+      if (response.cooldownType != null && response.timeLeftSeconds != null) {
+        showDialog(
+          context: context, // Используем `context` из State
+          builder: (context) =>
+              CooldownDialog(initialCooldownSeconds: response.timeLeftSeconds!),
+        );
       } else {
-        // ИЗМЕНЕНИЕ: Улучшенная логика обработки ошибок
-        if (response.cooldownType != null && response.timeLeftSeconds != null) {
-          // Если сервер вернул информацию о кулдауне, показываем новый диалог
-          showDialog(
-            context: context,
-            builder: (context) => CooldownDialog(
-              initialCooldownSeconds: response.timeLeftSeconds!,
-            ),
-          );
-        } else {
-          // Для всех остальных ошибок показываем простое сообщение
-          _showCustomSnackBar(context, response.message);
-        }
+        _showCustomSnackBar(context, response.message);
       }
     }
   }
