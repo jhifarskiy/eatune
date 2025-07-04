@@ -13,6 +13,7 @@ const client = new MongoClient(mongoUri);
 const dbName = 'eatune';
 
 const TRACK_COOLDOWN_MINUTES = 15;
+const USER_COOLDOWN_MINUTES = 5; // Новый кулдаун для пользователя
 const HISTORY_MAX_SIZE = 30;
 const BACKGROUND_QUEUE_SIZE = 4;
 
@@ -20,11 +21,14 @@ const BACKGROUND_QUEUE_SIZE = 4;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.set('trust proxy', 1); // Важно для корректного определения IP за прокси (напр. на Render)
+
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 let venueQueues = {};
+let userCooldowns = {}; // { venueId: { ip: timestamp } }
 let backgroundPlaylist = [];
 
 function broadcastQueueUpdate(venueId) {
@@ -135,12 +139,34 @@ app.post('/queue', async (req, res) => {
         venueQueues[venueId] = { queue: [], history: [], listeners: new Set(), backgroundTrackIndex: 0, trackCooldowns: new Map() };
     }
     const venue = venueQueues[venueId];
+    const userIp = req.ip;
     const now = Date.now();
+
+    // ПРОВЕРКА 0: Пользователь на кулдауне?
+    if (userCooldowns[venueId] && userCooldowns[venueId][userIp]) {
+        const lastAddTimestamp = userCooldowns[venueId][userIp];
+        const cooldownEndTime = lastAddTimestamp + USER_COOLDOWN_MINUTES * 60 * 1000;
+        if (now < cooldownEndTime) {
+            const timeLeftMs = cooldownEndTime - now;
+            const timeLeftSec = Math.ceil(timeLeftMs / 1000);
+            const timeLeftMin = Math.ceil(timeLeftMs / 60000);
+            return res.status(429).json({
+                error: `Следующий трек можно будет заказать через ${timeLeftMin} мин.`,
+                cooldownType: 'user', // Тип кулдауна для фронтенда
+                timeLeftSeconds: timeLeftSec,
+            });
+        }
+    }
 
     // ПРОВЕРКА 1: Трек на кулдауне, потому что недавно играл?
     if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
-        const timeLeft = Math.ceil((venue.trackCooldowns.get(trackId) - now) / 60000);
-        return res.status(429).json({ error: `Этот трек недавно играл. Попробуйте снова через ${timeLeft} мин.` });
+        const cooldownEndTime = venue.trackCooldowns.get(trackId);
+        const timeLeftMs = cooldownEndTime - now;
+        const timeLeftMin = Math.ceil(timeLeftMs / 60000);
+        return res.status(429).json({ 
+            error: `Этот трек недавно играл. Попробуйте снова через ${timeLeftMin} мин.`,
+            cooldownType: 'track' // Тип кулдауна для фронтенда
+        });
     }
 
     // ПРОВЕРКА 2: Трек уже заказан пользователем и ждет в очереди?
@@ -152,7 +178,8 @@ app.post('/queue', async (req, res) => {
     if (!selectedTrack) {
         return res.status(404).json({ error: 'Track not found' });
     }
-    const newTrack = { ...selectedTrack, isBackgroundTrack: false };
+    const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: userIp };
+
 
     // ПЕРЕСТРАИВАЕМ ОЧЕРЕДЬ
     const currentlyPlaying = venue.queue.length > 0 ? venue.queue[0] : null;
@@ -166,9 +193,16 @@ app.post('/queue', async (req, res) => {
     newQueue.push(newTrack);
 
     venue.queue = newQueue;
+    
+    // Устанавливаем кулдаун для пользователя
+    if (!userCooldowns[venueId]) {
+        userCooldowns[venueId] = {};
+    }
+    userCooldowns[venueId][userIp] = now;
+
 
     broadcastQueueUpdate(venueId);
-    console.log(`Track "${newTrack.title}" added for venue ${venueId}.`);
+    console.log(`Track "${newTrack.title}" added for venue ${venueId} by IP ${userIp}. User cooldown started.`);
     res.status(201).json({ success: true, message: 'Трек добавлен в очередь!' });
 });
 
@@ -213,6 +247,26 @@ app.post('/track/previous', (req, res) => {
     console.log(`Rewinding to previous track "${trackToReplay.title}" for venue ${venueId}.`);
     res.status(200).json({ success: true, currentTrack: venue.queue[0] || null });
 });
+
+// Функция для очистки старых записей о кулдаунах пользователей
+function cleanupUserCooldowns() {
+    const now = Date.now();
+    const cooldownPeriod = USER_COOLDOWN_MINUTES * 60 * 1000;
+    for (const venueId in userCooldowns) {
+        for (const userIp in userCooldowns[venueId]) {
+            if (now - userCooldowns[venueId][userIp] > cooldownPeriod) {
+                delete userCooldowns[venueId][userIp];
+            }
+        }
+        if (Object.keys(userCooldowns[venueId]).length === 0) {
+            delete userCooldowns[venueId];
+        }
+    }
+}
+
+// Запускаем очистку каждые 5 минут
+setInterval(cleanupUserCooldowns, 5 * 60 * 1000);
+
 
 // --- ЗАПУСК СЕРВЕРА ---
 async function startServer() {

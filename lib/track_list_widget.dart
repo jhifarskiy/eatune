@@ -33,8 +33,10 @@ class _TrackListWidgetState extends State<TrackListWidget> {
         return TrackConfirmationDialog(
           track: track,
           onConfirm: () {
-            _confirmTrackSelection(context, track.id);
+            // Закрываем диалог подтверждения ПЕРЕД отправкой запроса
             Navigator.of(context).pop();
+            // Отправляем запрос
+            _confirmTrackSelection(context, track.id);
           },
         );
       },
@@ -56,33 +58,36 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   void _confirmTrackSelection(BuildContext context, String id) async {
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
-      if (mounted)
+      if (mounted) {
         _showCustomSnackBar(
           context,
           'Ошибка сессии. Отсканируйте QR-код заново.',
         );
+      }
       return;
     }
+
     final ApiResponse response = await ApiService.addToQueue(
       trackId: id,
       venueId: venueId,
     );
+
     if (mounted) {
       if (response.success) {
         MyOrdersManager.add(id);
         _showCustomSnackBar(context, response.message);
       } else {
-        // ИЗМЕНЕНИЕ: Добавлена проверка на новый тип кулдауна
-        if (response.message.startsWith('Этот трек недавно играл') ||
-            response.message.startsWith(
-              'Следующий трек можно будет заказать',
-            )) {
+        // ИЗМЕНЕНИЕ: Улучшенная логика обработки ошибок
+        if (response.cooldownType != null && response.timeLeftSeconds != null) {
+          // Если сервер вернул информацию о кулдауне, показываем новый диалог
           showDialog(
             context: context,
-            builder: (context) =>
-                CooldownDialog(serverMessage: response.message),
+            builder: (context) => CooldownDialog(
+              initialCooldownSeconds: response.timeLeftSeconds!,
+            ),
           );
         } else {
+          // Для всех остальных ошибок показываем простое сообщение
           _showCustomSnackBar(context, response.message);
         }
       }
@@ -127,6 +132,8 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     );
   }
 }
+
+// ... остальной код виджета (_TrackItem, _TrackItemPlaceholder, _showCustomSnackBar) остается без изменений ...
 
 class _TrackItem extends StatelessWidget {
   final Track track;

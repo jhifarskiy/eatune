@@ -3,12 +3,19 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-// НОВЫЙ КЛАСС для ответов от API
 class ApiResponse {
   final bool success;
   final String message;
+  // ИЗМЕНЕНИЕ: Добавляем новые поля для детальной информации о кулдауне
+  final String? cooldownType; // 'user' или 'track'
+  final int? timeLeftSeconds; // Оставшееся время в секундах
 
-  ApiResponse({required this.success, this.message = ''});
+  ApiResponse({
+    required this.success,
+    this.message = '',
+    this.cooldownType,
+    this.timeLeftSeconds,
+  });
 }
 
 class Track {
@@ -19,6 +26,16 @@ class Track {
   final String? trackUrl;
   final String? coverUrl;
   final double? currentTime;
+
+  Track({
+    required this.id,
+    required this.title,
+    required this.artist,
+    required this.duration,
+    this.trackUrl,
+    this.coverUrl,
+    this.currentTime,
+  });
 
   Map<String, dynamic> toJson() {
     return {
@@ -31,16 +48,6 @@ class Track {
       'currentTime': currentTime,
     };
   }
-
-  Track({
-    required this.id,
-    required this.title,
-    required this.artist,
-    required this.duration,
-    this.trackUrl,
-    this.coverUrl,
-    this.currentTime,
-  });
 
   factory Track.fromJson(Map<String, dynamic> json) {
     return Track(
@@ -71,7 +78,6 @@ class ApiService {
     return [];
   }
 
-  // ИЗМЕНЕНИЕ: Метод теперь возвращает ApiResponse вместо bool
   static Future<ApiResponse> addToQueue({
     required String trackId,
     required String venueId,
@@ -83,17 +89,33 @@ class ApiService {
         body: json.encode({'id': trackId, 'venueId': venueId}),
       );
 
+      final body = json.decode(response.body);
+
       if (response.statusCode == 201) {
         return ApiResponse(success: true, message: 'Трек добавлен в очередь!');
+      }
+      // ИЗМЕНЕНИЕ: Улучшаем обработку ошибок
+      else if (response.statusCode == 429) {
+        // 429 - Too Many Requests (для кулдаунов)
+        return ApiResponse(
+          success: false,
+          message: body['error'] ?? 'Достигнут лимит запросов.',
+          // Извлекаем новые поля из ответа сервера
+          cooldownType: body['cooldownType'],
+          timeLeftSeconds: (body['timeLeftSeconds'] as num?)?.toInt(),
+        );
       } else {
-        // Пытаемся извлечь сообщение об ошибке от сервера
-        final body = json.decode(response.body);
-        final errorMessage = body['error'] ?? 'Не удалось добавить трек';
-        return ApiResponse(success: false, message: errorMessage);
+        // Для всех остальных ошибок (409, 400, 500 и т.д.)
+        return ApiResponse(
+          success: false,
+          message: body['error']?.toString() ?? 'Не удалось добавить трек',
+        );
       }
     } catch (e) {
-      print('Error adding to queue: $e');
-      return ApiResponse(success: false, message: 'Ошибка сети');
+      return ApiResponse(
+        success: false,
+        message: 'Ошибка сети. Проверьте подключение.',
+      );
     }
   }
 

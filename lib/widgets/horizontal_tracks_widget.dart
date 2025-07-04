@@ -62,8 +62,10 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
         return _TrackConfirmationDialog(
           track: track,
           onConfirm: () {
-            _confirmTrackSelection(track.id);
+            // Закрываем диалог подтверждения ПЕРЕД отправкой запроса
             Navigator.of(context).pop();
+            // Отправляем запрос
+            _confirmTrackSelection(track.id);
           },
         );
       },
@@ -104,12 +106,12 @@ class _HorizontalTracksWidgetState extends State<HorizontalTracksWidget> {
       MyOrdersManager.add(id);
       _showCustomSnackBar(context, response.message);
     } else {
-      // ИЗМЕНЕНИЕ: Добавлена проверка на новый тип кулдауна
-      if (response.message.startsWith('Этот трек недавно играл') ||
-          response.message.startsWith('Следующий трек можно будет заказать')) {
+      // ИЗМЕНЕНИЕ: Улучшенная логика обработки ошибок
+      if (response.cooldownType != null && response.timeLeftSeconds != null) {
         showDialog(
           context: context,
-          builder: (context) => CooldownDialog(serverMessage: response.message),
+          builder: (context) =>
+              CooldownDialog(initialCooldownSeconds: response.timeLeftSeconds!),
         );
       } else {
         _showCustomSnackBar(context, response.message);
@@ -445,11 +447,12 @@ class __ConfirmAddButtonState extends State<_ConfirmAddButton> {
   void _handleAdd() {
     if (_isAdding || _isAdded) return;
     setState(() => _isAdding = true);
+    // ИЗМЕНЕНИЕ: Убираем задержку
+    widget.onConfirm();
     Future.delayed(const Duration(milliseconds: 1200), () {
       if (mounted) {
         setState(() {
           _isAdded = true;
-          widget.onConfirm();
         });
       }
     });
