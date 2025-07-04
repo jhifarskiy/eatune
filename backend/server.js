@@ -12,8 +12,8 @@ const mongoUri = process.env.MONGO_URI || "mongodb+srv://jhifarskiy:83leva35@eat
 const client = new MongoClient(mongoUri);
 const dbName = 'eatune';
 
-const TRACK_COOLDOWN_MINUTES = 15; // Кулдаун для ОДНОГО И ТОГО ЖЕ трека
-const VENUE_ORDER_COOLDOWN_MINUTES = 5; // ОБЩИЙ кулдаун на любой новый заказ
+const TRACK_COOLDOWN_MINUTES = 15;
+const VENUE_ORDER_COOLDOWN_MINUTES = 5;
 const HISTORY_MAX_SIZE = 30;
 const BACKGROUND_QUEUE_SIZE = 4;
 
@@ -74,7 +74,6 @@ wss.on('connection', (ws, req) => {
             listeners: new Set(),
             backgroundTrackIndex: 0,
             trackCooldowns: new Map(),
-            lastOrderTime: 0 // <-- Время последнего заказа
         };
     }
     const venue = venueQueues[venueId];
@@ -112,21 +111,27 @@ app.get('/tracks', (req, res) => res.json(backgroundPlaylist));
 app.post('/queue', async (req, res) => {
     const { id: trackId, venueId } = req.body;
     if (!trackId || !venueId) return res.status(400).json({ error: 'Track ID and Venue ID are required' });
-    if (!venueQueues[venueId]) {
-        venueQueues[venueId] = { queue: [], history: [], listeners: new Set(), backgroundTrackIndex: 0, trackCooldowns: new Map(), lastOrderTime: 0 };
-    }
-    const venue = venueQueues[venueId];
-    const now = Date.now();
+    
+    // ИЗМЕНЕНИЕ: Получаем данные о заведении из БД
+    const db = client.db(dbName);
+    const venuesCollection = db.collection('venues');
+    const venueData = await venuesCollection.findOne({ _id: venueId });
 
-    // ПРОВЕРКА 1: ОБЩИЙ КУЛДАУН НА ЗАКАЗ
-    const venueOrderCooldownEnds = venue.lastOrderTime + (VENUE_ORDER_COOLDOWN_MINUTES * 60 * 1000);
-    console.log(`[COOLDOWN CHECK] Now: ${now}, Last Order: ${venue.lastOrderTime}, Cooldown Ends: ${venueOrderCooldownEnds}`);
+    const now = Date.now();
+    const lastOrderTime = venueData?.lastOrderTime || 0;
+
+    // ПРОВЕРКА 1: ОБЩИЙ КУЛДАУН НА ЗАКАЗ (теперь из БД)
+    const venueOrderCooldownEnds = lastOrderTime + (VENUE_ORDER_COOLDOWN_MINUTES * 60 * 1000);
     if (now < venueOrderCooldownEnds) {
         const timeLeft = Math.ceil((venueOrderCooldownEnds - now) / 60000);
-        console.log(`[COOLDOWN FAILED] Cooldown active. Time left: ${timeLeft} min.`);
         return res.status(429).json({ error: `Следующий трек можно будет заказать через ${timeLeft} мин.` });
     }
-    console.log(`[COOLDOWN PASSED] No active cooldown.`);
+    
+    // Инициализируем очередь в памяти, если ее нет
+    if (!venueQueues[venueId]) {
+        venueQueues[venueId] = { queue: [], history: [], listeners: new Set(), backgroundTrackIndex: 0, trackCooldowns: new Map() };
+    }
+    const venue = venueQueues[venueId];
 
     // ПРОВЕРКА 2: Кулдаун на конкретный трек
     if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
@@ -151,12 +156,15 @@ app.post('/queue', async (req, res) => {
     newQueue.push(newTrack);
     venue.queue = newQueue;
 
-    // После успешного заказа обновляем время последнего заказа
-    venue.lastOrderTime = now;
-    console.log(`[COOLDOWN SET] Last order time for venue ${venueId} set to: ${now}`);
+    // ИЗМЕНЕНИЕ: После успешного заказа обновляем время в БД
+    await venuesCollection.updateOne(
+        { _id: venueId },
+        { $set: { lastOrderTime: now } },
+        { upsert: true } // Создаст документ, если его нет
+    );
 
     broadcastQueueUpdate(venueId);
-    console.log(`Track "${newTrack.title}" added for venue ${venueId}.`);
+    console.log(`[DB Updated] Last order time for venue ${venueId} set to: ${now}`);
     res.status(201).json({ success: true, message: 'Трек добавлен в очередь!' });
 });
 
