@@ -12,7 +12,8 @@ const mongoUri = process.env.MONGO_URI || "mongodb+srv://jhifarskiy:83leva35@eat
 const client = new MongoClient(mongoUri);
 const dbName = 'eatune';
 
-const TRACK_COOLDOWN_MINUTES = 15;
+const TRACK_COOLDOWN_MINUTES = 15; // Кулдаун для ОДНОГО И ТОГО ЖЕ трека
+const VENUE_ORDER_COOLDOWN_MINUTES = 5; // ОБЩИЙ кулдаун на любой новый заказ
 const HISTORY_MAX_SIZE = 30;
 const BACKGROUND_QUEUE_SIZE = 4;
 
@@ -41,57 +42,45 @@ function broadcastQueueUpdate(venueId) {
 function ensureSufficientBackgroundTracks(venueId) {
     const venue = venueQueues[venueId];
     if (!venue || backgroundPlaylist.length === 0) return;
-
     const hasUserTracks = venue.queue.some(t => !t.isBackgroundTrack);
     if (hasUserTracks) return;
-
     let tracksToAdd = BACKGROUND_QUEUE_SIZE - venue.queue.length;
     if (tracksToAdd <= 0) return;
-    
     let currentTrackIndex = venue.backgroundTrackIndex || 0;
     let safeguard = backgroundPlaylist.length;
-
     while (tracksToAdd > 0 && safeguard > 0) {
         const nextTrack = backgroundPlaylist[currentTrackIndex];
         const isAlreadyInQueue = venue.queue.some(t => t.id === nextTrack.id);
         const isOnCooldown = venue.trackCooldowns.has(nextTrack.id) && Date.now() < venue.trackCooldowns.get(nextTrack.id);
-
         if (!isAlreadyInQueue && !isOnCooldown) {
             venue.queue.push({ ...nextTrack, isBackgroundTrack: true });
             tracksToAdd--;
         }
-        
         currentTrackIndex = (currentTrackIndex + 1) % backgroundPlaylist.length;
         safeguard--;
     }
     venue.backgroundTrackIndex = currentTrackIndex;
 }
 
-
-// --- УПРАВЛЕНИЕ WEBSOCKETS ---
 wss.on('connection', (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const venueId = url.searchParams.get('venueId');
-
     if (!venueId) return ws.close();
     console.log(`Player connected for venue: ${venueId}`);
-
     if (!venueQueues[venueId]) {
         venueQueues[venueId] = {
             queue: [],
             history: [],
             listeners: new Set(),
             backgroundTrackIndex: 0,
-            trackCooldowns: new Map()
+            trackCooldowns: new Map(),
+            lastOrderTime: 0 // <-- Время последнего заказа
         };
     }
-    
     const venue = venueQueues[venueId];
     venue.listeners.add(ws);
-    
     ensureSufficientBackgroundTracks(venueId);
     broadcastQueueUpdate(venueId);
-
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
@@ -109,63 +98,62 @@ wss.on('connection', (ws, req) => {
             console.error('Failed to parse message or broadcast:', e);
         }
     });
-
     ws.on('close', () => {
         console.log(`Player disconnected for venue: ${venueId}`);
         if (venue) {
             venue.listeners.delete(ws);
         }
     });
-
     ws.on('error', console.error);
 });
 
-
-// --- API МАРШРУТЫ ---
-app.get('/tracks', (req, res) => {
-    res.json(backgroundPlaylist);
-});
+app.get('/tracks', (req, res) => res.json(backgroundPlaylist));
 
 app.post('/queue', async (req, res) => {
     const { id: trackId, venueId } = req.body;
-    if (!trackId || !venueId) {
-        return res.status(400).json({ error: 'Track ID and Venue ID are required' });
-    }
+    if (!trackId || !venueId) return res.status(400).json({ error: 'Track ID and Venue ID are required' });
     if (!venueQueues[venueId]) {
-        venueQueues[venueId] = { queue: [], history: [], listeners: new Set(), backgroundTrackIndex: 0, trackCooldowns: new Map() };
+        venueQueues[venueId] = { queue: [], history: [], listeners: new Set(), backgroundTrackIndex: 0, trackCooldowns: new Map(), lastOrderTime: 0 };
     }
     const venue = venueQueues[venueId];
     const now = Date.now();
 
-    // ПРОВЕРКА 1: Трек на кулдауне, потому что недавно играл?
+    // ПРОВЕРКА 1: ОБЩИЙ КУЛДАУН НА ЗАКАЗ
+    const venueOrderCooldownEnds = venue.lastOrderTime + (VENUE_ORDER_COOLDOWN_MINUTES * 60 * 1000);
+    console.log(`[COOLDOWN CHECK] Now: ${now}, Last Order: ${venue.lastOrderTime}, Cooldown Ends: ${venueOrderCooldownEnds}`);
+    if (now < venueOrderCooldownEnds) {
+        const timeLeft = Math.ceil((venueOrderCooldownEnds - now) / 60000);
+        console.log(`[COOLDOWN FAILED] Cooldown active. Time left: ${timeLeft} min.`);
+        return res.status(429).json({ error: `Следующий трек можно будет заказать через ${timeLeft} мин.` });
+    }
+    console.log(`[COOLDOWN PASSED] No active cooldown.`);
+
+    // ПРОВЕРКА 2: Кулдаун на конкретный трек
     if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
         const timeLeft = Math.ceil((venue.trackCooldowns.get(trackId) - now) / 60000);
         return res.status(429).json({ error: `Этот трек недавно играл. Попробуйте снова через ${timeLeft} мин.` });
     }
 
-    // ПРОВЕРКА 2: Трек уже заказан пользователем и ждет в очереди?
+    // ПРОВЕРКА 3: Трек уже в очереди
     if (venue.queue.some(track => track.id === trackId && !track.isBackgroundTrack)) {
         return res.status(409).json({ error: "Этот трек уже в очереди" });
     }
 
     const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
-    if (!selectedTrack) {
-        return res.status(404).json({ error: 'Track not found' });
-    }
+    if (!selectedTrack) return res.status(404).json({ error: 'Track not found' });
+    
     const newTrack = { ...selectedTrack, isBackgroundTrack: false };
-
-    // ПЕРЕСТРАИВАЕМ ОЧЕРЕДЬ
     const currentlyPlaying = venue.queue.length > 0 ? venue.queue[0] : null;
     const existingUserTracks = venue.queue.filter((track, index) => index > 0 && !track.isBackgroundTrack);
-
     let newQueue = [];
-    if (currentlyPlaying) {
-        newQueue.push(currentlyPlaying);
-    }
+    if (currentlyPlaying) newQueue.push(currentlyPlaying);
     newQueue.push(...existingUserTracks);
     newQueue.push(newTrack);
-
     venue.queue = newQueue;
+
+    // После успешного заказа обновляем время последнего заказа
+    venue.lastOrderTime = now;
+    console.log(`[COOLDOWN SET] Last order time for venue ${venueId} set to: ${now}`);
 
     broadcastQueueUpdate(venueId);
     console.log(`Track "${newTrack.title}" added for venue ${venueId}.`);
@@ -174,39 +162,25 @@ app.post('/queue', async (req, res) => {
 
 app.post('/track/next', (req, res) => {
     const { venueId } = req.body;
-    if (!venueId || !venueQueues[venueId]) {
-        return res.status(400).json({ error: 'venueId is required or invalid' });
-    }
+    if (!venueId || !venueQueues[venueId]) return res.status(400).json({ error: 'venueId is required or invalid' });
     const venue = venueQueues[venueId];
-
     if (venue.queue.length > 0) {
         const finishedTrack = venue.queue.shift();
-
-        // Устанавливаем кулдаун, только когда трек ЗАКОНЧИЛСЯ
         venue.trackCooldowns.set(finishedTrack.id, Date.now() + TRACK_COOLDOWN_MINUTES * 60 * 1000);
-
         venue.history.unshift(finishedTrack);
-        if (venue.history.length > HISTORY_MAX_SIZE) {
-            venue.history.pop();
-        }
+        if (venue.history.length > HISTORY_MAX_SIZE) venue.history.pop();
         console.log(`Track "${finishedTrack.title}" finished. Cooldown started. Moved to history.`);
     }
-    
     ensureSufficientBackgroundTracks(venueId);
-    
     broadcastQueueUpdate(venueId);
     res.status(200).json({ success: true, nextTrack: venue.queue[0] || null });
 });
 
 app.post('/track/previous', (req, res) => {
     const { venueId } = req.body;
-    if (!venueId || !venueQueues[venueId]) {
-        return res.status(400).json({ error: 'venueId is required or invalid' });
-    }
+    if (!venueId || !venueQueues[venueId]) return res.status(400).json({ error: 'venueId is required or invalid' });
     const venue = venueQueues[venueId];
-    if (venue.history.length === 0) {
-        return res.status(404).json({ error: 'No previous track in history.' });
-    }
+    if (venue.history.length === 0) return res.status(404).json({ error: 'No previous track in history.' });
     const trackToReplay = venue.history.shift();
     venue.queue.unshift(trackToReplay);
     broadcastQueueUpdate(venueId);
@@ -214,7 +188,6 @@ app.post('/track/previous', (req, res) => {
     res.status(200).json({ success: true, currentTrack: venue.queue[0] || null });
 });
 
-// --- ЗАПУСК СЕРВЕРА ---
 async function startServer() {
     try {
         await client.connect();
@@ -222,23 +195,13 @@ async function startServer() {
         const db = client.db(dbName);
         const tracksCollection = db.collection('tracks');
         const tracksFromDb = await tracksCollection.find({}).toArray();
-        backgroundPlaylist = tracksFromDb.map(track => ({
-            id: track._id.toString(),
-            title: track.title || "Без названия",
-            artist: track.artist || "Неизвестный исполнитель",
-            duration: track.duration || "0:00",
-            trackUrl: track.url,
-            coverUrl: track.coverUrl || null
-        }));
-        
+        backgroundPlaylist = tracksFromDb.map(track => ({ id: track._id.toString(), title: track.title || "Без названия", artist: track.artist || "Неизвестный исполнитель", duration: track.duration || "0:00", trackUrl: track.url, coverUrl: track.coverUrl || null }));
         for (let i = backgroundPlaylist.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [backgroundPlaylist[i], backgroundPlaylist[j]] = [backgroundPlaylist[j], backgroundPlaylist[i]];
         }
         console.log(`Loaded and shuffled ${backgroundPlaylist.length} tracks into memory.`);
-        server.listen(port, '0.0.0.0', () => {
-            console.log(`Server running on port: ${port}`);
-        });
+        server.listen(port, '0.0.0.0', () => console.log(`Server running on port: ${port}`));
     } catch (error) {
         console.error("Failed to start server:", error);
         process.exit(1);
