@@ -131,6 +131,8 @@ app.get('/tracks', (req, res) => {
 });
 
 app.post('/queue', async (req, res) => {
+     console.log('--- V3 QUEUE ENDPOINT HIT ---'); // <--- ДОБАВЬТЕ ЭТУ СТРОКУ
+
     const { id: trackId, venueId } = req.body;
     if (!trackId || !venueId) {
         return res.status(400).json({ error: 'Track ID and Venue ID are required' });
