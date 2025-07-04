@@ -7,7 +7,6 @@ import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 import 'managers/favorites_manager.dart';
 
-// Функция для отображения кастомного SnackBar
 void _showCustomSnackBar(BuildContext context, String message) {
   ScaffoldMessenger.of(context).hideCurrentSnackBar();
   ScaffoldMessenger.of(context).showSnackBar(
@@ -84,7 +83,11 @@ class FavoritesScreen extends StatelessWidget {
         MyOrdersManager.add(id);
         _showCustomSnackBar(context, response.message);
       } else {
-        if (response.message.startsWith('Этот трек недавно играл')) {
+        // ИЗМЕНЕНИЕ: Добавлена проверка на новый тип кулдауна
+        if (response.message.startsWith('Этот трек недавно играл') ||
+            response.message.startsWith(
+              'Следующий трек можно будет заказать',
+            )) {
           showDialog(
             context: context,
             builder: (context) =>
@@ -107,9 +110,7 @@ class FavoritesScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(
-                height: 10,
-              ), // ИЗМЕНЕНИЕ: Добавлен верхний отступ для выравнивания
+              const SizedBox(height: 10),
               const Text(
                 'FAVORITE LIST',
                 style: TextStyle(

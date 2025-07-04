@@ -140,8 +140,9 @@ class _SearchPageState extends State<SearchPage> {
       MyOrdersManager.add(id);
       _showCustomSnackBar(context, response.message);
     } else {
-      // ИЗМЕНЕНИЕ: Проверяем правильное сообщение от сервера
-      if (response.message.startsWith('Этот трек недавно играл')) {
+      // ИЗМЕНЕНИЕ: Добавлена проверка на новый тип кулдауна
+      if (response.message.startsWith('Этот трек недавно играл') ||
+          response.message.startsWith('Следующий трек можно будет заказать')) {
         showDialog(
           context: context,
           builder: (context) => CooldownDialog(serverMessage: response.message),
