@@ -1,5 +1,5 @@
 const express = require('express');
-const cors =require('cors');
+const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const { WebSocketServer } = require('ws');
@@ -30,9 +30,6 @@ let venueQueues = {};
 let userCooldowns = {};
 let backgroundPlaylist = [];
 
-// --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ДЛЯ ПРОВЕРКИ ---
-const SERVER_VERSION = "V4_USER_COOLDOWN_ACTIVE"; // Версия для проверки
-
 function broadcastQueueUpdate(venueId) {
     if (venueQueues[venueId]) {
         const message = JSON.stringify({ type: 'queue_update', queue: venueQueues[venueId].queue });
@@ -48,6 +45,7 @@ function ensureSufficientBackgroundTracks(venueId) {
     const venue = venueQueues[venueId];
     if (!venue || backgroundPlaylist.length === 0) return;
 
+    // Если в очереди есть хоть один трек пользователя, НЕ добавляем фоновые.
     const hasUserTracks = venue.queue.some(t => !t.isBackgroundTrack);
     if (hasUserTracks) return;
 
@@ -129,13 +127,6 @@ app.get('/tracks', (req, res) => {
 });
 
 app.post('/queue', async (req, res) => {
-    // --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ДЛЯ ПРОВЕРКИ ---
-    // Этот код вернет ошибку, если на сервере старая версия файла.
-    // Если вы видите сообщение "Сервер не обновлен", значит, вы не загрузили новый server.js
-    if (SERVER_VERSION !== "V4_USER_COOLDOWN_ACTIVE") {
-        return res.status(500).json({ error: "СЕРВЕР НЕ ОБНОВЛЕН! Загрузите последнюю версию server.js" });
-    }
-
     const { id: trackId, venueId } = req.body;
     if (!trackId || !venueId) {
         return res.status(400).json({ error: 'Track ID and Venue ID are required' });
@@ -147,6 +138,7 @@ app.post('/queue', async (req, res) => {
     const userIp = req.ip;
     const now = Date.now();
 
+    // --- ПРОВЕРКИ КУЛДАУНОВ (без изменений) ---
     if (userCooldowns[venueId] && userCooldowns[venueId][userIp]) {
         const lastAddTimestamp = userCooldowns[venueId][userIp];
         const cooldownEndTime = lastAddTimestamp + USER_COOLDOWN_MINUTES * 60 * 1000;
@@ -178,27 +170,35 @@ app.post('/queue', async (req, res) => {
     if (!selectedTrack) {
         return res.status(404).json({ error: 'Track not found' });
     }
+
+    // =================================================================
+    // >> НОВАЯ ЛОГИКА ПЕРЕСТРОЕНИЯ ОЧЕРЕДИ <<
+    // =================================================================
     const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: userIp };
-
-    const currentlyPlaying = venue.queue.length > 0 ? venue.queue[0] : null;
-    const existingUserTracks = venue.queue.filter((track, index) => index > 0 && !track.isBackgroundTrack);
-
-    let newQueue = [];
-    if (currentlyPlaying) {
-        newQueue.push(currentlyPlaying);
-    }
-    newQueue.push(...existingUserTracks);
-    newQueue.push(newTrack);
-
-    venue.queue = newQueue;
     
+    // 1. Запоминаем текущий играющий трек (если он есть) и убираем его из очереди.
+    const currentlyPlaying = venue.queue.shift();
+
+    // 2. Выбрасываем из оставшейся очереди все фоновые треки. Остаются только заказанные.
+    venue.queue = venue.queue.filter(track => !track.isBackgroundTrack);
+
+    // 3. Добавляем новый заказанный трек в конец списка заказанных.
+    venue.queue.push(newTrack);
+
+    // 4. Возвращаем играющий трек в самое начало очереди.
+    if (currentlyPlaying) {
+        venue.queue.unshift(currentlyPlaying);
+    }
+    // =================================================================
+
+    // Устанавливаем кулдаун для пользователя
     if (!userCooldowns[venueId]) {
         userCooldowns[venueId] = {};
     }
     userCooldowns[venueId][userIp] = now;
 
     broadcastQueueUpdate(venueId);
-    console.log(`[V4] Track "${newTrack.title}" added for venue ${venueId} by IP ${userIp}. User cooldown started.`);
+    console.log(`[Priority Queue] Track "${newTrack.title}" added for venue ${venueId}.`);
     res.status(201).json({ success: true, message: 'Трек добавлен в очередь!' });
 });
 
@@ -216,9 +216,9 @@ app.post('/track/next', (req, res) => {
         if (venue.history.length > HISTORY_MAX_SIZE) {
             venue.history.pop();
         }
-        console.log(`Track "${finishedTrack.title}" finished. Cooldown started. Moved to history.`);
     }
     
+    // После того как трек закончился, проверяем, нужно ли добавить фоновые
     ensureSufficientBackgroundTracks(venueId);
     
     broadcastQueueUpdate(venueId);
@@ -237,7 +237,6 @@ app.post('/track/previous', (req, res) => {
     const trackToReplay = venue.history.shift();
     venue.queue.unshift(trackToReplay);
     broadcastQueueUpdate(venueId);
-    console.log(`Rewinding to previous track "${trackToReplay.title}" for venue ${venueId}.`);
     res.status(200).json({ success: true, currentTrack: venue.queue[0] || null });
 });
 
