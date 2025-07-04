@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/queue_manager.dart';
 import 'package:flutter/material.dart';

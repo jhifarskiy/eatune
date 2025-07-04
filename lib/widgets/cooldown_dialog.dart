@@ -1,13 +1,12 @@
-// lib/widgets/cooldown_dialog.dart
-
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class CooldownDialog extends StatefulWidget {
-  final String serverMessage;
+  // ИСПРАВЛЕНИЕ: Принимаем точное время в секундах
+  final int initialCooldownSeconds;
 
-  const CooldownDialog({super.key, required this.serverMessage});
+  const CooldownDialog({super.key, required this.initialCooldownSeconds});
 
   @override
   State<CooldownDialog> createState() => _CooldownDialogState();
@@ -20,36 +19,28 @@ class _CooldownDialogState extends State<CooldownDialog> {
   @override
   void initState() {
     super.initState();
-    _remainingTime = _parseDurationFromMessage(widget.serverMessage);
+    // ИСПРАВЛЕНИЕ: Инициализируем таймер из полученного значения
+    _remainingTime = Duration(seconds: widget.initialCooldownSeconds);
     _startTimer();
-  }
-
-  Duration _parseDurationFromMessage(String message) {
-    // Ищем первое число в строке (например, "5" из "через 5 мин.")
-    final regExp = RegExp(r'\d+');
-    final match = regExp.firstMatch(message);
-    if (match != null) {
-      final minutes = int.tryParse(match.group(0) ?? '1') ?? 1;
-      return Duration(minutes: minutes);
-    }
-    // Значение по умолчанию, если не удалось распознать
-    return const Duration(minutes: 5);
   }
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
       if (_remainingTime.inSeconds <= 0) {
         timer.cancel();
-        // Можно автоматически закрыть диалог, когда время выйдет
+        // Автоматически закрываем диалог, когда время вышло
         if (mounted) {
           Navigator.of(context).pop();
         }
       } else {
-        if (mounted) {
-          setState(() {
-            _remainingTime = _remainingTime - const Duration(seconds: 1);
-          });
-        }
+        setState(() {
+          _remainingTime = _remainingTime - const Duration(seconds: 1);
+        });
       }
     });
   }

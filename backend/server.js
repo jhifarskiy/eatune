@@ -1,5 +1,5 @@
 const express = require('express');
-const cors = require('cors');
+const cors =require('cors');
 const path = require('path');
 const http = require('http');
 const { WebSocketServer } = require('ws');
@@ -13,7 +13,7 @@ const client = new MongoClient(mongoUri);
 const dbName = 'eatune';
 
 const TRACK_COOLDOWN_MINUTES = 15;
-const USER_COOLDOWN_MINUTES = 5; // Новый кулдаун для пользователя
+const USER_COOLDOWN_MINUTES = 5;
 const HISTORY_MAX_SIZE = 30;
 const BACKGROUND_QUEUE_SIZE = 4;
 
@@ -21,15 +21,17 @@ const BACKGROUND_QUEUE_SIZE = 4;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-app.set('trust proxy', 1); // Важно для корректного определения IP за прокси (напр. на Render)
-
+app.set('trust proxy', 1);
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 let venueQueues = {};
-let userCooldowns = {}; // { venueId: { ip: timestamp } }
+let userCooldowns = {};
 let backgroundPlaylist = [];
+
+// --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ДЛЯ ПРОВЕРКИ ---
+const SERVER_VERSION = "V4_USER_COOLDOWN_ACTIVE"; // Версия для проверки
 
 function broadcastQueueUpdate(venueId) {
     if (venueQueues[venueId]) {
@@ -71,8 +73,6 @@ function ensureSufficientBackgroundTracks(venueId) {
     venue.backgroundTrackIndex = currentTrackIndex;
 }
 
-
-// --- УПРАВЛЕНИЕ WEBSOCKETS ---
 wss.on('connection', (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const venueId = url.searchParams.get('venueId');
@@ -124,14 +124,17 @@ wss.on('connection', (ws, req) => {
     ws.on('error', console.error);
 });
 
-
-// --- API МАРШРУТЫ ---
 app.get('/tracks', (req, res) => {
     res.json(backgroundPlaylist);
 });
 
 app.post('/queue', async (req, res) => {
-     console.log('--- V3 QUEUE ENDPOINT HIT ---'); // <--- ДОБАВЬТЕ ЭТУ СТРОКУ
+    // --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ДЛЯ ПРОВЕРКИ ---
+    // Этот код вернет ошибку, если на сервере старая версия файла.
+    // Если вы видите сообщение "Сервер не обновлен", значит, вы не загрузили новый server.js
+    if (SERVER_VERSION !== "V4_USER_COOLDOWN_ACTIVE") {
+        return res.status(500).json({ error: "СЕРВЕР НЕ ОБНОВЛЕН! Загрузите последнюю версию server.js" });
+    }
 
     const { id: trackId, venueId } = req.body;
     if (!trackId || !venueId) {
@@ -144,34 +147,29 @@ app.post('/queue', async (req, res) => {
     const userIp = req.ip;
     const now = Date.now();
 
-    // ПРОВЕРКА 0: Пользователь на кулдауне?
     if (userCooldowns[venueId] && userCooldowns[venueId][userIp]) {
         const lastAddTimestamp = userCooldowns[venueId][userIp];
         const cooldownEndTime = lastAddTimestamp + USER_COOLDOWN_MINUTES * 60 * 1000;
         if (now < cooldownEndTime) {
             const timeLeftMs = cooldownEndTime - now;
             const timeLeftSec = Math.ceil(timeLeftMs / 1000);
-            const timeLeftMin = Math.ceil(timeLeftMs / 60000);
             return res.status(429).json({
-                error: `Следующий трек можно будет заказать через ${timeLeftMin} мин.`,
-                cooldownType: 'user', // Тип кулдауна для фронтенда
+                error: `Следующий трек можно будет заказать через ${Math.ceil(timeLeftMs / 60000)} мин.`,
+                cooldownType: 'user',
                 timeLeftSeconds: timeLeftSec,
             });
         }
     }
 
-    // ПРОВЕРКА 1: Трек на кулдауне, потому что недавно играл?
     if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
         const cooldownEndTime = venue.trackCooldowns.get(trackId);
         const timeLeftMs = cooldownEndTime - now;
-        const timeLeftMin = Math.ceil(timeLeftMs / 60000);
         return res.status(429).json({ 
-            error: `Этот трек недавно играл. Попробуйте снова через ${timeLeftMin} мин.`,
-            cooldownType: 'track' // Тип кулдауна для фронтенда
+            error: `Этот трек недавно играл. Попробуйте снова через ${Math.ceil(timeLeftMs / 60000)} мин.`,
+            cooldownType: 'track'
         });
     }
 
-    // ПРОВЕРКА 2: Трек уже заказан пользователем и ждет в очереди?
     if (venue.queue.some(track => track.id === trackId && !track.isBackgroundTrack)) {
         return res.status(409).json({ error: "Этот трек уже в очереди" });
     }
@@ -182,8 +180,6 @@ app.post('/queue', async (req, res) => {
     }
     const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: userIp };
 
-
-    // ПЕРЕСТРАИВАЕМ ОЧЕРЕДЬ
     const currentlyPlaying = venue.queue.length > 0 ? venue.queue[0] : null;
     const existingUserTracks = venue.queue.filter((track, index) => index > 0 && !track.isBackgroundTrack);
 
@@ -196,15 +192,13 @@ app.post('/queue', async (req, res) => {
 
     venue.queue = newQueue;
     
-    // Устанавливаем кулдаун для пользователя
     if (!userCooldowns[venueId]) {
         userCooldowns[venueId] = {};
     }
     userCooldowns[venueId][userIp] = now;
 
-
     broadcastQueueUpdate(venueId);
-    console.log(`Track "${newTrack.title}" added for venue ${venueId} by IP ${userIp}. User cooldown started.`);
+    console.log(`[V4] Track "${newTrack.title}" added for venue ${venueId} by IP ${userIp}. User cooldown started.`);
     res.status(201).json({ success: true, message: 'Трек добавлен в очередь!' });
 });
 
@@ -217,10 +211,7 @@ app.post('/track/next', (req, res) => {
 
     if (venue.queue.length > 0) {
         const finishedTrack = venue.queue.shift();
-
-        // Устанавливаем кулдаун, только когда трек ЗАКОНЧИЛСЯ
         venue.trackCooldowns.set(finishedTrack.id, Date.now() + TRACK_COOLDOWN_MINUTES * 60 * 1000);
-
         venue.history.unshift(finishedTrack);
         if (venue.history.length > HISTORY_MAX_SIZE) {
             venue.history.pop();
@@ -250,7 +241,6 @@ app.post('/track/previous', (req, res) => {
     res.status(200).json({ success: true, currentTrack: venue.queue[0] || null });
 });
 
-// Функция для очистки старых записей о кулдаунах пользователей
 function cleanupUserCooldowns() {
     const now = Date.now();
     const cooldownPeriod = USER_COOLDOWN_MINUTES * 60 * 1000;
@@ -266,11 +256,8 @@ function cleanupUserCooldowns() {
     }
 }
 
-// Запускаем очистку каждые 5 минут
 setInterval(cleanupUserCooldowns, 5 * 60 * 1000);
 
-
-// --- ЗАПУСК СЕРВЕРА ---
 async function startServer() {
     try {
         await client.connect();

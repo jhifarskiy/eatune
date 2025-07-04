@@ -72,6 +72,15 @@ class _TrackListWidgetState extends State<TrackListWidget> {
       venueId: venueId,
     );
 
+    // --- ДОБАВЬТЕ ЭТОТ БЛОК ДЛЯ ДИАГНОСТИКИ ---
+    print('--- API RESPONSE RECEIVED ---');
+    print('Success: ${response.success}');
+    print('Message: ${response.message}');
+    print('Cooldown Type: ${response.cooldownType}');
+    print('Time Left (s): ${response.timeLeftSeconds}');
+    print('-----------------------------');
+    // ------------------------------------------
+
     if (mounted) {
       if (response.success) {
         MyOrdersManager.add(id);

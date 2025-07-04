@@ -42,8 +42,8 @@ class FavoritesScreen extends StatelessWidget {
         return _TrackConfirmationDialog(
           track: track,
           onConfirm: () {
-            _confirmTrackSelection(context, track.id);
             Navigator.of(context).pop();
+            _confirmTrackSelection(context, track.id);
           },
         );
       },
@@ -83,15 +83,13 @@ class FavoritesScreen extends StatelessWidget {
         MyOrdersManager.add(id);
         _showCustomSnackBar(context, response.message);
       } else {
-        // ИЗМЕНЕНИЕ: Добавлена проверка на новый тип кулдауна
-        if (response.message.startsWith('Этот трек недавно играл') ||
-            response.message.startsWith(
-              'Следующий трек можно будет заказать',
-            )) {
+        // ИСПРАВЛЕНИЕ: Используем новую логику обработки ошибок
+        if (response.cooldownType != null && response.timeLeftSeconds != null) {
           showDialog(
             context: context,
-            builder: (context) =>
-                CooldownDialog(serverMessage: response.message),
+            builder: (context) => CooldownDialog(
+              initialCooldownSeconds: response.timeLeftSeconds!,
+            ),
           );
         } else {
           _showCustomSnackBar(context, response.message);
@@ -431,11 +429,11 @@ class __ConfirmAddButtonState extends State<_ConfirmAddButton> {
   void _handleAdd() {
     if (_isAdding || _isAdded) return;
     setState(() => _isAdding = true);
+    widget.onConfirm();
     Future.delayed(const Duration(milliseconds: 1200), () {
       if (mounted) {
         setState(() {
           _isAdded = true;
-          widget.onConfirm();
         });
       }
     });
