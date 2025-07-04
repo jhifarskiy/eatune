@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+const path =require('path');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const { MongoClient } = require('mongodb');
@@ -109,63 +109,64 @@ wss.on('connection', (ws, req) => {
 app.get('/tracks', (req, res) => res.json(backgroundPlaylist));
 
 app.post('/queue', async (req, res) => {
-    const { id: trackId, venueId } = req.body;
-    if (!trackId || !venueId) return res.status(400).json({ error: 'Track ID and Venue ID are required' });
-    
-    // ИЗМЕНЕНИЕ: Получаем данные о заведении из БД
-    const db = client.db(dbName);
-    const venuesCollection = db.collection('venues');
-    const venueData = await venuesCollection.findOne({ _id: venueId });
+    // ИЗМЕНЕНИЕ: Весь код обернут в try...catch
+    try {
+        const { id: trackId, venueId } = req.body;
+        if (!trackId || !venueId) return res.status(400).json({ error: 'Track ID and Venue ID are required' });
+        
+        const db = client.db(dbName);
+        const venuesCollection = db.collection('venues');
+        const venueData = await venuesCollection.findOne({ _id: venueId });
 
-    const now = Date.now();
-    const lastOrderTime = venueData?.lastOrderTime || 0;
+        const now = Date.now();
+        const lastOrderTime = venueData?.lastOrderTime || 0;
 
-    // ПРОВЕРКА 1: ОБЩИЙ КУЛДАУН НА ЗАКАЗ (теперь из БД)
-    const venueOrderCooldownEnds = lastOrderTime + (VENUE_ORDER_COOLDOWN_MINUTES * 60 * 1000);
-    if (now < venueOrderCooldownEnds) {
-        const timeLeft = Math.ceil((venueOrderCooldownEnds - now) / 60000);
-        return res.status(429).json({ error: `Следующий трек можно будет заказать через ${timeLeft} мин.` });
+        const venueOrderCooldownEnds = lastOrderTime + (VENUE_ORDER_COOLDOWN_MINUTES * 60 * 1000);
+        if (now < venueOrderCooldownEnds) {
+            const timeLeft = Math.ceil((venueOrderCooldownEnds - now) / 60000);
+            return res.status(429).json({ error: `Следующий трек можно будет заказать через ${timeLeft} мин.` });
+        }
+        
+        if (!venueQueues[venueId]) {
+            venueQueues[venueId] = { queue: [], history: [], listeners: new Set(), backgroundTrackIndex: 0, trackCooldowns: new Map() };
+        }
+        const venue = venueQueues[venueId];
+
+        if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
+            const timeLeft = Math.ceil((venue.trackCooldowns.get(trackId) - now) / 60000);
+            return res.status(429).json({ error: `Этот трек недавно играл. Попробуйте снова через ${timeLeft} мин.` });
+        }
+
+        if (venue.queue.some(track => track.id === trackId && !track.isBackgroundTrack)) {
+            return res.status(409).json({ error: "Этот трек уже в очереди" });
+        }
+
+        const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
+        if (!selectedTrack) return res.status(404).json({ error: 'Track not found' });
+        
+        const newTrack = { ...selectedTrack, isBackgroundTrack: false };
+        const currentlyPlaying = venue.queue.length > 0 ? venue.queue[0] : null;
+        const existingUserTracks = venue.queue.filter((track, index) => index > 0 && !track.isBackgroundTrack);
+        let newQueue = [];
+        if (currentlyPlaying) newQueue.push(currentlyPlaying);
+        newQueue.push(...existingUserTracks);
+        newQueue.push(newTrack);
+        venue.queue = newQueue;
+
+        await venuesCollection.updateOne(
+            { _id: venueId },
+            { $set: { lastOrderTime: now } },
+            { upsert: true }
+        );
+
+        broadcastQueueUpdate(venueId);
+        console.log(`[DB Updated] Last order time for venue ${venueId} set to: ${now}`);
+        res.status(201).json({ success: true, message: 'Трек добавлен в очередь!' });
+
+    } catch (error) {
+        console.error('Critical error in /queue handler:', error);
+        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
     }
-    
-    // Инициализируем очередь в памяти, если ее нет
-    if (!venueQueues[venueId]) {
-        venueQueues[venueId] = { queue: [], history: [], listeners: new Set(), backgroundTrackIndex: 0, trackCooldowns: new Map() };
-    }
-    const venue = venueQueues[venueId];
-
-    // ПРОВЕРКА 2: Кулдаун на конкретный трек
-    if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
-        const timeLeft = Math.ceil((venue.trackCooldowns.get(trackId) - now) / 60000);
-        return res.status(429).json({ error: `Этот трек недавно играл. Попробуйте снова через ${timeLeft} мин.` });
-    }
-
-    // ПРОВЕРКА 3: Трек уже в очереди
-    if (venue.queue.some(track => track.id === trackId && !track.isBackgroundTrack)) {
-        return res.status(409).json({ error: "Этот трек уже в очереди" });
-    }
-
-    const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
-    if (!selectedTrack) return res.status(404).json({ error: 'Track not found' });
-    
-    const newTrack = { ...selectedTrack, isBackgroundTrack: false };
-    const currentlyPlaying = venue.queue.length > 0 ? venue.queue[0] : null;
-    const existingUserTracks = venue.queue.filter((track, index) => index > 0 && !track.isBackgroundTrack);
-    let newQueue = [];
-    if (currentlyPlaying) newQueue.push(currentlyPlaying);
-    newQueue.push(...existingUserTracks);
-    newQueue.push(newTrack);
-    venue.queue = newQueue;
-
-    // ИЗМЕНЕНИЕ: После успешного заказа обновляем время в БД
-    await venuesCollection.updateOne(
-        { _id: venueId },
-        { $set: { lastOrderTime: now } },
-        { upsert: true } // Создаст документ, если его нет
-    );
-
-    broadcastQueueUpdate(venueId);
-    console.log(`[DB Updated] Last order time for venue ${venueId} set to: ${now}`);
-    res.status(201).json({ success: true, message: 'Трек добавлен в очередь!' });
 });
 
 app.post('/track/next', (req, res) => {
