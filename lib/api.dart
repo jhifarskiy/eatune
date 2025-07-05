@@ -24,6 +24,7 @@ class Track {
   final String title;
   final String artist;
   final String duration;
+  final String? genre;
   final String? trackUrl;
   final String? coverUrl;
   final double? currentTime;
@@ -33,6 +34,7 @@ class Track {
     required this.title,
     required this.artist,
     required this.duration,
+    this.genre,
     this.trackUrl,
     this.coverUrl,
     this.currentTime,
@@ -44,6 +46,7 @@ class Track {
       'title': title,
       'artist': artist,
       'duration': duration,
+      'genre': genre,
       'trackUrl': trackUrl,
       'coverUrl': coverUrl,
       'currentTime': currentTime,
@@ -56,6 +59,7 @@ class Track {
       title: json['title'] ?? 'Unknown Title',
       artist: json['artist'] ?? 'Unknown Artist',
       duration: json['duration'] ?? '0:00',
+      genre: json['genre'],
       trackUrl: json['trackUrl'],
       coverUrl: json['coverUrl'],
       currentTime: (json['currentTime'] as num?)?.toDouble(),

@@ -7,8 +7,40 @@ import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 import 'managers/favorites_manager.dart';
 
+// Вспомогательный класс для отключения glow-эффекта
+class NoGlowScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
+void _showCustomSnackBar(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+      backgroundColor: const Color(0xFF1885D3),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50.0)),
+      margin: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
+      duration: const Duration(milliseconds: 1500),
+    ),
+  );
+}
+
 class FavoritesScreen extends StatefulWidget {
-  // ИСПРАВЛЕНИЕ: Преобразуем в StatefulWidget
   const FavoritesScreen({super.key});
 
   @override
@@ -16,32 +48,7 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  // ИСПРАВЛЕНИЕ: Создаем State
-  void _showCustomSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: const Color(0xFF1885D3),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(50.0),
-        ),
-        margin: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
-        duration: const Duration(milliseconds: 1500),
-      ),
-    );
-  }
-
   void _showConfirmationModal(Track track) {
-    // ИСПРАВЛЕНИЕ: Контекст берется из State
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -73,7 +80,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   void _confirmTrackSelection(String id) async {
-    // ИСПРАВЛЕНИЕ: Контекст берется из State
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
       if (!mounted) return;
@@ -88,9 +94,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       trackId: id,
       venueId: venueId,
     );
-
     if (!mounted) return;
-
     if (response.success) {
       MyOrdersManager.add(id);
       _showCustomSnackBar(context, response.message);
@@ -161,137 +165,141 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 )
               else
                 Expanded(
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: favoriteTracks.length,
-                    itemBuilder: (context, index) {
-                      final track = favoriteTracks[index];
-                      return _AnimatedTrackItem(
-                        onTap: () => _showConfirmationModal(track),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  track.coverUrl ?? '',
-                                  width: 50,
-                                  height: 50,
-                                  fit: BoxFit.cover,
-                                  frameBuilder:
-                                      (
-                                        context,
-                                        child,
-                                        frame,
-                                        wasSynchronouslyLoaded,
-                                      ) {
-                                        if (wasSynchronouslyLoaded) {
-                                          return child;
-                                        }
-                                        return AnimatedOpacity(
-                                          opacity: frame == null ? 0 : 1,
-                                          duration: const Duration(
-                                            milliseconds: 300,
-                                          ),
-                                          curve: Curves.easeOut,
-                                          child: child,
-                                        );
-                                      },
-                                  loadingBuilder:
-                                      (context, child, loadingProgress) {
-                                        if (loadingProgress == null) {
-                                          return child;
-                                        }
-                                        return Shimmer.fromColors(
-                                          baseColor: Colors.grey[850]!,
-                                          highlightColor: Colors.grey[800]!,
-                                          child: Container(
-                                            width: 50,
-                                            height: 50,
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey[850],
-                                              borderRadius:
-                                                  BorderRadius.circular(8.0),
+                  child: ScrollConfiguration(
+                    behavior: NoGlowScrollBehavior(),
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: favoriteTracks.length,
+                      itemBuilder: (context, index) {
+                        final track = favoriteTracks[index];
+                        return _AnimatedTrackItem(
+                          onTap: () => _showConfirmationModal(track),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Row(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    track.coverUrl ?? '',
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                    frameBuilder:
+                                        (
+                                          context,
+                                          child,
+                                          frame,
+                                          wasSynchronouslyLoaded,
+                                        ) {
+                                          if (wasSynchronouslyLoaded) {
+                                            return child;
+                                          }
+                                          return AnimatedOpacity(
+                                            opacity: frame == null ? 0 : 1,
+                                            duration: const Duration(
+                                              milliseconds: 300,
                                             ),
-                                          ),
-                                        );
-                                      },
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF374151),
-                                          borderRadius: BorderRadius.circular(
-                                            8.0,
-                                          ),
+                                            curve: Curves.easeOut,
+                                            child: child,
+                                          );
+                                        },
+                                    loadingBuilder:
+                                        (context, child, loadingProgress) {
+                                          if (loadingProgress == null) {
+                                            return child;
+                                          }
+                                          return Shimmer.fromColors(
+                                            baseColor: Colors.grey[850]!,
+                                            highlightColor: Colors.grey[800]!,
+                                            child: Container(
+                                              width: 50,
+                                              height: 50,
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey[850],
+                                                borderRadius:
+                                                    BorderRadius.circular(8.0),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            Container(
+                                              width: 50,
+                                              height: 50,
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF374151),
+                                                borderRadius:
+                                                    BorderRadius.circular(8.0),
+                                              ),
+                                              child: const Icon(
+                                                Icons.music_note,
+                                                color: Colors.grey,
+                                                size: 24,
+                                              ),
+                                            ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        track.title,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
                                         ),
-                                        child: const Icon(
-                                          Icons.music_note,
-                                          color: Colors.grey,
-                                          size: 24,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        track.artist,
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.5),
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w400,
                                         ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      track.title,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      track.artist,
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.5),
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
+                                const SizedBox(width: 16),
+                                Text(
+                                  track.duration,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.5),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 16),
-                              Text(
-                                track.duration,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.5),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w400,
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.favorite,
+                                    color: Colors.redAccent,
+                                  ),
+                                  onPressed: () {
+                                    FavoritesManager.removeFavorite(track.id);
+                                    _showCustomSnackBar(
+                                      context,
+                                      'Удалено из избранного',
+                                    );
+                                  },
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.favorite,
-                                  color: Colors.redAccent,
-                                ),
-                                onPressed: () {
-                                  FavoritesManager.removeFavorite(track.id);
-                                  _showCustomSnackBar(
-                                    context,
-                                    'Удалено из избранного',
-                                  );
-                                },
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
               const SizedBox(height: 85),

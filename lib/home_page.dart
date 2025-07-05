@@ -1,59 +1,166 @@
+import 'package:eatune/managers/queue_manager.dart';
+import 'package:eatune/widgets/album_browser_widget.dart';
+import 'package:eatune/widgets/genre_selector_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'widgets/horizontal_tracks_widget.dart';
+import 'package:provider/provider.dart';
 import 'track_list_widget.dart';
 import 'queue_page.dart';
 import 'favorites_screen.dart';
 import 'search_page.dart';
 
+class NoGlowScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class HomeContent extends StatelessWidget {
+class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
+  @override
+  State<HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  final List<String> _genres = const [
+    'Popular',
+    'R&B',
+    'Hip-Hop',
+    'Electronic',
+    'Rock',
+    'Soul',
+    'All Tracks',
+  ];
+
+  late String _selectedGenre;
+  String? _selectedArtist;
+  String _trackListTitle = 'Popular';
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedGenre = _genres.first;
+    _trackListTitle = _genres.first;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              SizedBox(height: 10),
-              HorizontalTracksWidget(),
-              SizedBox(height: 10), // Было 32 — уменьшили
-              Text(
-                'ALL TRACKS',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.5,
+    // ИЗМЕНЕНИЕ: Скрываем блок с подборками только для "All Tracks"
+    final bool showPicks = _selectedGenre != 'All Tracks';
+
+    return ScrollConfiguration(
+      behavior: NoGlowScrollBehavior(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GenreSelectorWidget(
+            genres: _genres,
+            onGenreSelected: (genre) {
+              setState(() {
+                _selectedGenre = genre;
+                _selectedArtist = null;
+                _trackListTitle = genre;
+              });
+            },
+          ),
+
+          // ИЗМЕНЕНИЕ: Возвращаем AnimatedSwitcher для правильной анимации
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              final slideAnimation = Tween<Offset>(
+                begin: const Offset(0.0, -0.3),
+                end: Offset.zero,
+              ).animate(animation);
+
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: slideAnimation, child: child),
+              );
+            },
+            child: showPicks
+                ? Column(
+                    key: const ValueKey('picks-visible'),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Text(
+                          'PICKS IN $_selectedGenre'.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      AlbumBrowserWidget(
+                        key: ValueKey<String>(_selectedGenre),
+                        genreFilter: _selectedGenre,
+                        onArtistTapped: (artistName) {
+                          setState(() {
+                            _selectedArtist = artistName;
+                            _trackListTitle = artistName;
+                          });
+                        },
+                      ),
+                    ],
+                  )
+                : const SizedBox(key: ValueKey('picks-hidden')),
+          ),
+
+          const SizedBox(height: 24),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Text(
+              _trackListTitle.toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                child: TrackListWidget(
+                  key: ValueKey('$_selectedGenre/$_selectedArtist'),
+                  genreFilter: _selectedGenre,
+                  artistFilter: _selectedArtist,
                 ),
               ),
-              SizedBox(height: 8), // Было 16 — уменьшили
-            ],
+            ),
           ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: TrackListWidget(),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
@@ -61,6 +168,27 @@ class _HomePageState extends State<HomePage> {
     const QueuePage(),
     const FavoritesScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      print("App resumed, attempting to reconnect WebSocket...");
+      context.read<QueueManager>().connect();
+    }
+  }
 
   void _openSearchPage() {
     Navigator.push(
@@ -74,7 +202,6 @@ class _HomePageState extends State<HomePage> {
             parent: animation,
             curve: Curves.linear,
           );
-
           return FadeTransition(opacity: curvedAnimation, child: child);
         },
       ),
@@ -84,7 +211,6 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: true,
       resizeToAvoidBottomInset: false,
       body: Container(
         decoration: const BoxDecoration(
@@ -111,7 +237,7 @@ class _HomePageState extends State<HomePage> {
                           icon: SvgPicture.asset(
                             'assets/icons/search.svg',
                             color: Colors.white,
-                            width: 28,
+                            width: 24,
                           ),
                           onPressed: _openSearchPage,
                           splashColor: Colors.transparent,
@@ -125,7 +251,7 @@ class _HomePageState extends State<HomePage> {
                           icon: SvgPicture.asset(
                             'assets/icons/settings.svg',
                             color: Colors.white,
-                            width: 30,
+                            width: 24,
                           ),
                           onPressed: () {},
                           splashColor: Colors.transparent,
@@ -153,95 +279,60 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-      bottomNavigationBar: SizedBox(
-        height: 80,
-        child: Stack(
+      bottomNavigationBar: Container(
+        height: 65,
+        color: const Color(0xFF0D325F),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            Positioned.fill(
-              child: Container(
-                color: Color(0xFF0D325F), // нижняя часть градиента с экрана
-              ),
-            ),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final double width = constraints.maxWidth;
-                final double itemWidth = width / 3;
-                final double bubbleWidth = 64;
-                final double bubbleHeight = 52;
-                final double bubbleLeft =
-                    _currentIndex * itemWidth + (itemWidth - bubbleWidth) / 2;
-                final double bubbleTop = (80 - bubbleHeight) / 2;
-
-                return Stack(
-                  children: [
-                    AnimatedPositioned(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      left: bubbleLeft,
-                      top: bubbleTop,
-                      child: Container(
-                        width: bubbleWidth,
-                        height: bubbleHeight,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1CA4FF),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                    ),
-                    SizedBox.expand(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Center(
-                              child: _buildNavItem(0, 'assets/icons/home.svg'),
-                            ),
-                          ),
-                          Expanded(
-                            child: Center(
-                              child: _buildNavItem(
-                                1,
-                                'assets/icons/playlist.svg',
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Center(
-                              child: _buildNavItem(2, 'assets/icons/heart.svg'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
+            _buildNavItem(index: 0, asset: 'assets/icons/home.svg'),
+            _buildNavItem(index: 1, asset: 'assets/icons/playlist.svg'),
+            _buildNavItem(index: 2, asset: 'assets/icons/heart.svg'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, String asset) {
+  Widget _buildNavItem({required int index, required String asset}) {
+    final bool isSelected = _currentIndex == index;
+    const double iconSize = 26.0;
+
     return GestureDetector(
       onTap: () {
+        if (index == 1) {
+          context.read<QueueManager>().connect();
+        }
         setState(() {
           _currentIndex = index;
         });
       },
       behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: SizedBox(
-          width: 30,
-          height: 30,
-          child: SvgPicture.asset(
-            asset,
-            width: 30,
-            height: 30,
-            color: Colors.white,
-            fit: BoxFit.contain,
-          ),
+      child: SizedBox(
+        width: 80,
+        height: 65,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SvgPicture.asset(
+              asset,
+              width: iconSize,
+              height: iconSize,
+              color: Colors.white,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 6),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              height: 3,
+              width: isSelected ? iconSize : 0,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1CA4FF),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
         ),
       ),
     );

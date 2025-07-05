@@ -4,6 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'api.dart';
 
+// Вспомогательный класс для отключения glow-эффекта
+class NoGlowScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 // Карточка для трека, который играет сейчас
 class _NowPlayingCard extends StatefulWidget {
   final Track track;
@@ -168,31 +180,33 @@ class QueuePage extends StatelessWidget {
           return _buildEmptyState(context);
         }
 
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(24, 10, 24, 85),
-          children: [
-            _buildSectionTitle('Сейчас играет'),
-            const SizedBox(height: 12),
-            _NowPlayingCard(track: nowPlaying),
-            if (upNext.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              _buildSectionTitle('Далее в очереди'),
+        return ScrollConfiguration(
+          behavior: NoGlowScrollBehavior(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 10, 24, 85),
+            children: [
+              _buildSectionTitle('Сейчас играет'),
               const SizedBox(height: 12),
-              ...upNext
-                  .map(
-                    (track) =>
-                        _buildQueueItem(track, upNext.indexOf(track) + 1),
-                  )
-                  .toList(),
+              _NowPlayingCard(track: nowPlaying),
+              if (upNext.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                _buildSectionTitle('Далее в очереди'),
+                const SizedBox(height: 12),
+                ...upNext
+                    .map(
+                      (track) =>
+                          _buildQueueItem(track, upNext.indexOf(track) + 1),
+                    )
+                    .toList(),
+              ],
             ],
-          ],
+          ),
         );
       },
     );
   }
 }
 
-// ИЗМЕНЕНИЕ: Убран лишний отступ
 Widget _buildSectionTitle(String title) {
   return Text(
     title.toUpperCase(),

@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:eatune/managers/favorites_manager.dart';
 import 'package:eatune/managers/my_orders_manager.dart';
+import 'package:eatune/managers/track_cache_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 
-// Вспомогательный класс для отключения glow-эффекта
 class NoGlowScrollBehavior extends ScrollBehavior {
   @override
   Widget buildOverscrollIndicator(
@@ -51,7 +51,7 @@ class _SearchPageState extends State<SearchPage> {
 
   Future<void> _loadAllTracks() async {
     try {
-      final tracks = await ApiService.getAllTracks();
+      final tracks = await TrackCacheManager.getAllTracks();
       if (mounted) {
         setState(() {
           _allTracks = tracks;
@@ -60,6 +60,7 @@ class _SearchPageState extends State<SearchPage> {
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
+      print("Error loading tracks for search: $e");
     }
   }
 
@@ -100,9 +101,7 @@ class _SearchPageState extends State<SearchPage> {
           track: track,
           onConfirm: () {
             Navigator.of(context).pop();
-            _confirmTrackSelection(
-              track.id,
-            ); // ИСПРАВЛЕНИЕ: Не передаем контекст
+            _confirmTrackSelection(track.id);
           },
         );
       },
@@ -122,7 +121,6 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void _confirmTrackSelection(String id) async {
-    // ИСПРАВЛЕНИЕ: Не принимаем контекст
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
       if (!mounted) return;

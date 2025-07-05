@@ -1,4 +1,5 @@
 import 'package:eatune/managers/my_orders_manager.dart';
+import 'package:eatune/managers/track_cache_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:eatune/widgets/track_confirmation_dialog.dart';
@@ -7,19 +8,56 @@ import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 
 class TrackListWidget extends StatefulWidget {
-  const TrackListWidget({super.key});
+  final String? genreFilter;
+  final String? artistFilter;
+
+  const TrackListWidget({super.key, this.genreFilter, this.artistFilter});
 
   @override
   State<TrackListWidget> createState() => _TrackListWidgetState();
 }
 
 class _TrackListWidgetState extends State<TrackListWidget> {
-  late Future<List<Track>> _allTracksFuture;
+  late Future<List<Track>> _tracksFuture;
 
   @override
   void initState() {
     super.initState();
-    _allTracksFuture = ApiService.getAllTracks();
+    _tracksFuture = _loadAndFilterTracks();
+  }
+
+  Future<List<Track>> _loadAndFilterTracks() async {
+    var tracks = await TrackCacheManager.getAllTracks();
+
+    // Показываем все треки, если выбран "Popular" или "All Tracks" И не выбран артист
+    if ((widget.genreFilter == 'Popular' ||
+            widget.genreFilter == 'All Tracks') &&
+        widget.artistFilter == null) {
+      return tracks;
+    }
+
+    // Фильтруем по жанру (если это не Popular/All Tracks)
+    if (widget.genreFilter != null &&
+        widget.genreFilter != 'Popular' &&
+        widget.genreFilter != 'All Tracks') {
+      tracks = tracks
+          .where((track) => track.genre == widget.genreFilter)
+          .toList();
+    }
+
+    // Фильтруем по артисту, если он выбран
+    if (widget.artistFilter != null) {
+      tracks = tracks
+          .where((track) => track.artist == widget.artistFilter)
+          .toList();
+    }
+    // Если артист НЕ выбран, но жанр - конкретный, возвращаем пустой список, чтобы сработала заглушка
+    else if (widget.genreFilter != 'Popular' &&
+        widget.genreFilter != 'All Tracks') {
+      return [];
+    }
+
+    return tracks;
   }
 
   void _showConfirmationModal(BuildContext context, Track track) {
@@ -34,9 +72,7 @@ class _TrackListWidgetState extends State<TrackListWidget> {
           track: track,
           onConfirm: () {
             Navigator.of(context).pop();
-            _confirmTrackSelection(
-              track.id,
-            ); // ИСПРАВЛЕНИЕ: Не передаем контекст
+            _confirmTrackSelection(track.id);
           },
         );
       },
@@ -56,7 +92,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   }
 
   void _confirmTrackSelection(String id) async {
-    // ИСПРАВЛЕНИЕ: Не принимаем контекст
     final venueId = await VenueSessionManager.getActiveVenueId();
     if (venueId == null) {
       if (!mounted) return;
@@ -72,7 +107,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
       venueId: venueId,
     );
 
-    // ИСПРАВЛЕНИЕ: Проверяем `mounted` перед использованием `context`
     if (!mounted) return;
 
     if (response.success) {
@@ -81,7 +115,7 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     } else {
       if (response.cooldownType != null && response.timeLeftSeconds != null) {
         showDialog(
-          context: context, // Используем `context` из State
+          context: context,
           builder: (context) =>
               CooldownDialog(initialCooldownSeconds: response.timeLeftSeconds!),
         );
@@ -94,23 +128,48 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Track>>(
-      future: _allTracksFuture,
+      future: _tracksFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return ListView.builder(
-            padding: EdgeInsets.zero,
-            itemCount: 10,
-            itemBuilder: (context, index) => const _TrackItemPlaceholder(),
-          );
+          return const _TrackListPlaceholder();
         }
 
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+        if (snapshot.hasError) {
           return const Center(
             child: Text(
               'Не удалось загрузить список треков.',
               style: TextStyle(color: Colors.white70),
             ),
           );
+        }
+
+        // ИЗМЕНЕНИЕ: Показываем заглушку, если список пуст
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          bool isSpecificGenre =
+              widget.genreFilter != 'Popular' &&
+              widget.genreFilter != 'All Tracks';
+          // Показываем инструкцию, если выбран конкретный жанр, но не артист
+          if (isSpecificGenre && widget.artistFilter == null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.arrow_upward_rounded,
+                    color: Colors.white.withOpacity(0.3),
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Выберите подборку выше',
+                    style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                  ),
+                ],
+              ),
+            );
+          }
+          // В остальных случаях (например, у артиста нет треков) - показываем шиммер
+          return const _TrackListPlaceholder();
         }
 
         final tracks = snapshot.data!;
@@ -129,8 +188,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
     );
   }
 }
-
-// ... остальной код виджета (_TrackItem, _TrackItemPlaceholder, _showCustomSnackBar) остается без изменений ...
 
 class _TrackItem extends StatelessWidget {
   final Track track;
@@ -207,62 +264,76 @@ class _TrackItem extends StatelessWidget {
   }
 }
 
-class _TrackItemPlaceholder extends StatelessWidget {
-  const _TrackItemPlaceholder();
+class _TrackListPlaceholder extends StatelessWidget {
+  const _TrackListPlaceholder();
 
   @override
   Widget build(BuildContext context) {
     return Shimmer.fromColors(
       baseColor: Colors.grey[850]!,
       highlightColor: Colors.grey[800]!,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8.0),
-              ),
+      child: ListView.builder(
+        padding: EdgeInsets.zero,
+        itemCount: 10,
+        physics: const NeverScrollableScrollPhysics(),
+        itemBuilder: (context, index) => const _TrackItemPlaceholder(),
+      ),
+    );
+  }
+}
+
+class _TrackItemPlaceholder extends StatelessWidget {
+  const _TrackItemPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8.0),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8.0),
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 100,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: 100,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8.0),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Container(
-              width: 40,
-              height: 14,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8.0),
-              ),
+          ),
+          const SizedBox(width: 16),
+          Container(
+            width: 40,
+            height: 14,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8.0),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
