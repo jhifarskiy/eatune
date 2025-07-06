@@ -1,27 +1,32 @@
-# Flutter/Dart specific
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Flutter
+build/
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
 .pub-cache/
 .pub/
-/build/
-*.iml
-*.lastbuildstate
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/App.framework
+/ios/Flutter/engine.framework
+/ios/Flutter/flutter_assets/
+/ios/Flutter/Generated.xcconfig
+/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+/android/key.properties
 
-# Node.js backend specific
-/backend/node_modules/
-/backend/currentTrack.json
-/backend/.env
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Node
+/backend/node_modules
+/backend/npm-debug.log*
+/backend/yarn-debug.log*
+/backend/yarn-error.log*
+.pnp
+.pnp.js
 
-# IDE specific
-.idea/
-.vscode/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# Наши папки
+/backend/tracks-to-upload/

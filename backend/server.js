@@ -1,3 +1,5 @@
+// backend/server.js
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -9,8 +11,9 @@ const { MongoClient } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 3000;
 const mongoUri = process.env.MONGO_URI || "mongodb+srv://jhifarskiy:83leva35@eatune.8vrsmid.mongodb.net/?retryWrites=true&w=majority&appName=Eatune";
-const client = new MongoClient(mongoUri);
+const client = new MongoClient(mongoUri, { tls: true }); // Добавил tls для стабильности
 const dbName = 'eatune';
+const COLLECTION_NAME = 'tracks';
 
 const TRACK_COOLDOWN_MINUTES = 15;
 const USER_COOLDOWN_MINUTES = 5;
@@ -20,16 +23,14 @@ const BACKGROUND_QUEUE_SIZE = 4;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-// app.set('trust proxy', 1); // Больше не нужно для кулдаунов
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 let venueQueues = {};
-let userCooldowns = {}; // Теперь будет { venueId: { deviceId: timestamp } }
+let userCooldowns = {};
 let backgroundPlaylist = [];
 
-// ... (функции broadcastQueueUpdate и ensureSufficientBackgroundTracks без изменений) ...
 function broadcastQueueUpdate(venueId) {
     if (venueQueues[venueId]) {
         const message = JSON.stringify({ type: 'queue_update', queue: venueQueues[venueId].queue });
@@ -64,7 +65,6 @@ function ensureSufficientBackgroundTracks(venueId) {
     venue.backgroundTrackIndex = currentTrackIndex;
 }
 
-// ... (WebSocket .on('connection') без изменений) ...
 wss.on('connection', (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const venueId = url.searchParams.get('venueId');
@@ -109,12 +109,44 @@ wss.on('connection', (ws, req) => {
     ws.on('error', console.error);
 });
 
-app.get('/tracks', (req, res) => {
-    res.json(backgroundPlaylist);
+// ИЗМЕНЕНИЕ: Переписываем маршрут /tracks
+app.get('/tracks', async (req, res) => {
+    // mode: 'popular', 'all', 'year'
+    // value: '2024' (для 'year')
+    // limit: 50
+    const { mode = 'all', value, limit = 0 } = req.query;
+
+    try {
+        let tracks = [...backgroundPlaylist]; // Работаем с кэшем в памяти
+
+        // Фильтрация по году
+        if (mode === 'year' && value) {
+            const yearNum = parseInt(value, 10);
+            tracks = tracks.filter(t => t.year === yearNum);
+        }
+        
+        // Перемешивание для 'popular'
+        if (mode === 'popular') {
+            for (let i = tracks.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
+            }
+        }
+        
+        // Ограничение количества треков
+        const limitNum = parseInt(limit, 10);
+        if (limitNum > 0 && tracks.length > limitNum) {
+            tracks = tracks.slice(0, limitNum);
+        }
+
+        res.json(tracks);
+    } catch (e) {
+        console.error('Track fetch error:', e);
+        res.status(500).json({ error: 'Failed to fetch tracks' });
+    }
 });
 
 app.post('/queue', async (req, res) => {
-    // ИЗМЕНЕНИЕ: Получаем deviceId из тела запроса
     const { id: trackId, venueId, deviceId } = req.body;
 
     if (!trackId || !venueId || !deviceId) {
@@ -127,8 +159,6 @@ app.post('/queue', async (req, res) => {
     
     const venue = venueQueues[venueId];
     const now = Date.now();
-
-    // ИЗМЕНЕНИЕ: Проверяем кулдаун по deviceId
     const venueUserCooldowns = userCooldowns[venueId] || {};
     const lastAddTimestamp = venueUserCooldowns[deviceId];
 
@@ -161,7 +191,7 @@ app.post('/queue', async (req, res) => {
         return res.status(404).json({ error: 'Track not found' });
     }
 
-    const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: deviceId }; // Можно сохранять deviceId
+    const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: deviceId };
     const currentlyPlaying = venue.queue.shift();
     venue.queue = venue.queue.filter(track => !track.isBackgroundTrack);
     venue.queue.push(newTrack);
@@ -169,18 +199,15 @@ app.post('/queue', async (req, res) => {
         venue.queue.unshift(currentlyPlaying);
     }
     
-    // ИЗМЕНЕНИЕ: Устанавливаем кулдаун по deviceId
     if (!userCooldowns[venueId]) {
         userCooldowns[venueId] = {};
     }
     userCooldowns[venueId][deviceId] = now;
 
     broadcastQueueUpdate(venueId);
-    console.log(`Track "${newTrack.title}" added by device ${deviceId}.`);
     res.status(201).json({ success: true, message: 'Трек добавлен в очередь!' });
 });
 
-// ... (остальные маршруты и функции без изменений) ...
 app.post('/track/next', (req, res) => {
     const { venueId } = req.body;
     if (!venueId || !venueQueues[venueId]) {
@@ -219,7 +246,7 @@ function cleanupUserCooldowns() {
     const now = Date.now();
     const cooldownPeriod = USER_COOLDOWN_MINUTES * 60 * 1000;
     for (const venueId in userCooldowns) {
-        for (const deviceId in userCooldowns[venueId]) { // Проверяем по deviceId
+        for (const deviceId in userCooldowns[venueId]) {
             if (now - userCooldowns[venueId][deviceId] > cooldownPeriod) {
                 delete userCooldowns[venueId][deviceId];
             }
@@ -236,21 +263,20 @@ async function startServer() {
         await client.connect();
         console.log("Successfully connected to MongoDB Atlas!");
         const db = client.db(dbName);
-        const tracksCollection = db.collection('tracks');
+        const tracksCollection = db.collection(COLLECTION_NAME);
         const tracksFromDb = await tracksCollection.find({}).toArray();
         backgroundPlaylist = tracksFromDb.map(track => ({
             id: track._id.toString(),
             title: track.title || "Без названия",
             artist: track.artist || "Неизвестный исполнитель",
             duration: track.duration || "0:00",
+            genre: track.genre || "Pop",
+            year: track.year || null,
             trackUrl: track.url,
             coverUrl: track.coverUrl || null
         }));
-        for (let i = backgroundPlaylist.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [backgroundPlaylist[i], backgroundPlaylist[j]] = [backgroundPlaylist[j], backgroundPlaylist[i]];
-        }
-        console.log(`Loaded and shuffled ${backgroundPlaylist.length} tracks into memory.`);
+        
+        console.log(`Loaded ${backgroundPlaylist.length} tracks into memory.`);
         server.listen(port, '0.0.0.0', () => {
             console.log(`Server running on port: ${port}`);
         });
@@ -259,4 +285,5 @@ async function startServer() {
         process.exit(1);
     }
 }
+
 startServer();

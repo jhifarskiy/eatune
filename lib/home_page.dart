@@ -1,13 +1,16 @@
-import 'package:eatune/managers/queue_manager.dart';
-import 'package:eatune/widgets/album_browser_widget.dart';
-import 'package:eatune/widgets/genre_selector_widget.dart';
+// lib/home_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
-import 'track_list_widget.dart';
-import 'queue_page.dart';
-import 'favorites_screen.dart';
+
+import 'managers/queue_manager.dart';
 import 'search_page.dart';
+import 'favorites_screen.dart';
+import 'queue_page.dart';
+import 'track_list_widget.dart';
+import 'widgets/mode_selector_widget.dart';
+import 'widgets/year_browser_widget.dart';
 
 class NoGlowScrollBehavior extends ScrollBehavior {
   @override
@@ -33,125 +36,103 @@ class HomeContent extends StatefulWidget {
 }
 
 class _HomeContentState extends State<HomeContent> {
-  final List<String> _genres = const [
-    'Popular',
-    'R&B',
-    'Hip-Hop',
-    'Electronic',
-    'Rock',
-    'Soul',
-    'All Tracks',
-  ];
-
-  late String _selectedGenre;
-  String? _selectedArtist;
-  String _trackListTitle = 'Popular';
+  final List<String> _modes = const ['Popular', 'By year', 'All Tracks'];
+  late String _selectedMode;
+  String? _selectedYear;
 
   @override
   void initState() {
     super.initState();
-    _selectedGenre = _genres.first;
-    _trackListTitle = _genres.first;
+    _selectedMode = _modes.first;
+  }
+
+  Widget _buildBody() {
+    switch (_selectedMode) {
+      case 'Popular':
+        return TrackListWidget(
+          mode: 'popular',
+          limit: 50,
+          key: const ValueKey('popular'),
+        );
+      case 'All Tracks':
+        return TrackListWidget(
+          mode: 'all',
+          limit: 50,
+          key: const ValueKey('all'),
+        );
+      case 'By year':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            YearBrowserWidget(
+              onYearTapped: (year) {
+                setState(() {
+                  _selectedYear = year;
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Text(
+                _selectedYear == null
+                    ? 'CHOOSE YEAR'
+                    : 'HITS OF $_selectedYear',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: _selectedYear == null
+                    ? const Center(
+                        child: Text(
+                          "Выберите год из списка выше",
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      )
+                    : TrackListWidget(
+                        mode: 'year',
+                        filterValue: _selectedYear!,
+                        key: ValueKey(_selectedYear),
+                      ),
+              ),
+            ),
+          ],
+        );
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ИЗМЕНЕНИЕ: Скрываем блок с подборками только для "All Tracks"
-    final bool showPicks = _selectedGenre != 'All Tracks';
-
     return ScrollConfiguration(
       behavior: NoGlowScrollBehavior(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GenreSelectorWidget(
-            genres: _genres,
-            onGenreSelected: (genre) {
+          ModeSelectorWidget(
+            modes: _modes,
+            selectedMode: _selectedMode,
+            onModeSelected: (mode) {
               setState(() {
-                _selectedGenre = genre;
-                _selectedArtist = null;
-                _trackListTitle = genre;
+                _selectedMode = mode;
+                _selectedYear = null;
               });
             },
           ),
-
-          // ИЗМЕНЕНИЕ: Возвращаем AnimatedSwitcher для правильной анимации
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (Widget child, Animation<double> animation) {
-              final slideAnimation = Tween<Offset>(
-                begin: const Offset(0.0, -0.3),
-                end: Offset.zero,
-              ).animate(animation);
-
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(position: slideAnimation, child: child),
-              );
-            },
-            child: showPicks
-                ? Column(
-                    key: const ValueKey('picks-visible'),
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Text(
-                          'PICKS IN $_selectedGenre'.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      AlbumBrowserWidget(
-                        key: ValueKey<String>(_selectedGenre),
-                        genreFilter: _selectedGenre,
-                        onArtistTapped: (artistName) {
-                          setState(() {
-                            _selectedArtist = artistName;
-                            _trackListTitle = artistName;
-                          });
-                        },
-                      ),
-                    ],
-                  )
-                : const SizedBox(key: ValueKey('picks-hidden')),
-          ),
-
-          const SizedBox(height: 24),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Text(
-              _trackListTitle.toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-
+          const SizedBox(height: 16),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                child: TrackListWidget(
-                  key: ValueKey('$_selectedGenre/$_selectedArtist'),
-                  genreFilter: _selectedGenre,
-                  artistFilter: _selectedArtist,
-                ),
-              ),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: _buildBody(),
             ),
           ),
         ],
@@ -185,7 +166,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      print("App resumed, attempting to reconnect WebSocket...");
       context.read<QueueManager>().connect();
     }
   }

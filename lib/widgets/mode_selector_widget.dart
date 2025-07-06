@@ -1,23 +1,43 @@
+// lib/widgets/mode_selector_widget.dart
+
 import 'package:flutter/material.dart';
 
-class GenreSelectorWidget extends StatefulWidget {
-  final List<String> genres;
-  final Function(String) onGenreSelected;
+class ModeSelectorWidget extends StatefulWidget {
+  final List<String> modes;
+  final String selectedMode;
+  final Function(String) onModeSelected;
 
-  const GenreSelectorWidget({
+  const ModeSelectorWidget({
     super.key,
-    required this.genres,
-    required this.onGenreSelected,
+    required this.modes,
+    required this.selectedMode,
+    required this.onModeSelected,
   });
 
   @override
-  State<GenreSelectorWidget> createState() => _GenreSelectorWidgetState();
+  State<ModeSelectorWidget> createState() => _ModeSelectorWidgetState();
 }
 
-class _GenreSelectorWidgetState extends State<GenreSelectorWidget> {
+class _ModeSelectorWidgetState extends State<ModeSelectorWidget> {
   int _selectedIndex = 0;
 
-  // Функция для точного вычисления ширины текста
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.modes.indexOf(widget.selectedMode);
+  }
+
+  // Обновляем индекс, если меняется выбранный режим извне
+  @override
+  void didUpdateWidget(covariant ModeSelectorWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedMode != oldWidget.selectedMode) {
+      setState(() {
+        _selectedIndex = widget.modes.indexOf(widget.selectedMode);
+      });
+    }
+  }
+
   double _calculateTextWidth(String text, TextStyle style) {
     final TextPainter textPainter = TextPainter(
       text: TextSpan(text: text, style: style),
@@ -34,9 +54,9 @@ class _GenreSelectorWidgetState extends State<GenreSelectorWidget> {
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 24.0),
-        itemCount: widget.genres.length,
+        itemCount: widget.modes.length,
         itemBuilder: (context, index) {
-          final genre = widget.genres[index];
+          final mode = widget.modes[index];
           final bool isSelected = _selectedIndex == index;
 
           final style = TextStyle(
@@ -46,9 +66,8 @@ class _GenreSelectorWidgetState extends State<GenreSelectorWidget> {
             letterSpacing: 1.2,
           );
 
-          // Вычисляем ширину для каждого элемента
           final double textWidth = _calculateTextWidth(
-            genre.toUpperCase(),
+            mode.toUpperCase(),
             style,
           );
 
@@ -57,7 +76,7 @@ class _GenreSelectorWidgetState extends State<GenreSelectorWidget> {
               setState(() {
                 _selectedIndex = index;
               });
-              widget.onGenreSelected(genre);
+              widget.onModeSelected(mode);
             },
             child: Container(
               color: Colors.transparent,
@@ -66,13 +85,12 @@ class _GenreSelectorWidgetState extends State<GenreSelectorWidget> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(genre.toUpperCase(), style: style),
+                  Text(mode.toUpperCase(), style: style),
                   const SizedBox(height: 6),
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
                     curve: Curves.easeInOut,
                     height: 3,
-                    // ИЗМЕНЕНИЕ: Ширина полоски теперь равна ширине текста
                     width: isSelected ? textWidth : 0,
                     decoration: BoxDecoration(
                       color: const Color(0xFF1CA4FF),

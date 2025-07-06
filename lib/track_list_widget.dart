@@ -1,5 +1,4 @@
 import 'package:eatune/managers/my_orders_manager.dart';
-import 'package:eatune/managers/track_cache_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:eatune/widgets/track_confirmation_dialog.dart';
@@ -8,10 +7,17 @@ import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 
 class TrackListWidget extends StatefulWidget {
-  final String? genreFilter;
-  final String? artistFilter;
+  // ИЗМЕНЕНИЕ: Принимаем новые параметры
+  final String mode;
+  final String? filterValue;
+  final int limit;
 
-  const TrackListWidget({super.key, this.genreFilter, this.artistFilter});
+  const TrackListWidget({
+    super.key,
+    required this.mode,
+    this.filterValue,
+    this.limit = 0,
+  });
 
   @override
   State<TrackListWidget> createState() => _TrackListWidgetState();
@@ -23,41 +29,13 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   @override
   void initState() {
     super.initState();
-    _tracksFuture = _loadAndFilterTracks();
-  }
-
-  Future<List<Track>> _loadAndFilterTracks() async {
-    var tracks = await TrackCacheManager.getAllTracks();
-
-    // Показываем все треки, если выбран "Popular" или "All Tracks" И не выбран артист
-    if ((widget.genreFilter == 'Popular' ||
-            widget.genreFilter == 'All Tracks') &&
-        widget.artistFilter == null) {
-      return tracks;
-    }
-
-    // Фильтруем по жанру (если это не Popular/All Tracks)
-    if (widget.genreFilter != null &&
-        widget.genreFilter != 'Popular' &&
-        widget.genreFilter != 'All Tracks') {
-      tracks = tracks
-          .where((track) => track.genre == widget.genreFilter)
-          .toList();
-    }
-
-    // Фильтруем по артисту, если он выбран
-    if (widget.artistFilter != null) {
-      tracks = tracks
-          .where((track) => track.artist == widget.artistFilter)
-          .toList();
-    }
-    // Если артист НЕ выбран, но жанр - конкретный, возвращаем пустой список, чтобы сработала заглушка
-    else if (widget.genreFilter != 'Popular' &&
-        widget.genreFilter != 'All Tracks') {
-      return [];
-    }
-
-    return tracks;
+    // ИЗМЕНЕНИЕ: Запрашиваем треки у сервера с новыми параметрами
+    // Вся логика фильтрации теперь на стороне сервера
+    _tracksFuture = ApiService.getTracks(
+      mode: widget.mode,
+      value: widget.filterValue,
+      limit: widget.limit,
+    );
   }
 
   void _showConfirmationModal(BuildContext context, Track track) {
@@ -143,33 +121,13 @@ class _TrackListWidgetState extends State<TrackListWidget> {
           );
         }
 
-        // ИЗМЕНЕНИЕ: Показываем заглушку, если список пуст
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          bool isSpecificGenre =
-              widget.genreFilter != 'Popular' &&
-              widget.genreFilter != 'All Tracks';
-          // Показываем инструкцию, если выбран конкретный жанр, но не артист
-          if (isSpecificGenre && widget.artistFilter == null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.arrow_upward_rounded,
-                    color: Colors.white.withOpacity(0.3),
-                    size: 48,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Выберите подборку выше',
-                    style: TextStyle(color: Colors.white.withOpacity(0.7)),
-                  ),
-                ],
-              ),
-            );
-          }
-          // В остальных случаях (например, у артиста нет треков) - показываем шиммер
-          return const _TrackListPlaceholder();
+          return const Center(
+            child: Text(
+              'Треков не найдено.',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
         }
 
         final tracks = snapshot.data!;
@@ -276,14 +234,14 @@ class _TrackListPlaceholder extends StatelessWidget {
         padding: EdgeInsets.zero,
         itemCount: 10,
         physics: const NeverScrollableScrollPhysics(),
-        itemBuilder: (context, index) => const _TrackItemPlaceholder(),
+        itemBuilder: (context, index) => const _TrackItemPlaceholderItem(),
       ),
     );
   }
 }
 
-class _TrackItemPlaceholder extends StatelessWidget {
-  const _TrackItemPlaceholder();
+class _TrackItemPlaceholderItem extends StatelessWidget {
+  const _TrackItemPlaceholderItem();
 
   @override
   Widget build(BuildContext context) {
