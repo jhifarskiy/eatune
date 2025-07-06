@@ -1,5 +1,3 @@
-// lib/widgets/mode_selector_widget.dart
-
 import 'package:flutter/material.dart';
 
 class ModeSelectorWidget extends StatefulWidget {
@@ -19,89 +17,104 @@ class ModeSelectorWidget extends StatefulWidget {
 }
 
 class _ModeSelectorWidgetState extends State<ModeSelectorWidget> {
-  int _selectedIndex = 0;
+  final List<GlobalKey> _keys = [];
+  double _indicatorWidth = 0;
+  double _indicatorLeft = 0;
 
   @override
   void initState() {
     super.initState();
-    _selectedIndex = widget.modes.indexOf(widget.selectedMode);
+    // Создаем ключи для каждого элемента списка
+    for (int i = 0; i < widget.modes.length; i++) {
+      _keys.add(GlobalKey());
+    }
+    // Вычисляем начальную позицию индикатора после первого кадра
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _updateIndicatorPosition(),
+    );
   }
 
-  // Обновляем индекс, если меняется выбранный режим извне
   @override
   void didUpdateWidget(covariant ModeSelectorWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedMode != oldWidget.selectedMode) {
-      setState(() {
-        _selectedIndex = widget.modes.indexOf(widget.selectedMode);
-      });
+      _updateIndicatorPosition();
     }
   }
 
-  double _calculateTextWidth(String text, TextStyle style) {
-    final TextPainter textPainter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      maxLines: 1,
-      textDirection: TextDirection.ltr,
-    )..layout(minWidth: 0, maxWidth: double.infinity);
-    return textPainter.size.width;
+  void _updateIndicatorPosition() {
+    final selectedIndex = widget.modes.indexOf(widget.selectedMode);
+    if (selectedIndex == -1) return;
+
+    final key = _keys[selectedIndex];
+    final RenderBox? renderBox =
+        key.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox != null) {
+      setState(() {
+        _indicatorWidth = renderBox.size.width;
+        // renderBox.localToGlobal(Offset.zero) дает позицию относительно экрана,
+        // нам нужна позиция относительно ListView, поэтому используем только .dx
+        _indicatorLeft =
+            renderBox.localToGlobal(Offset.zero).dx -
+            24; // 24 - это отступ родительского ListView
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 40,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-        itemCount: widget.modes.length,
-        itemBuilder: (context, index) {
-          final mode = widget.modes[index];
-          final bool isSelected = _selectedIndex == index;
-
-          final style = TextStyle(
-            color: isSelected ? Colors.white : Colors.white.withOpacity(0.5),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.2,
-          );
-
-          final double textWidth = _calculateTextWidth(
-            mode.toUpperCase(),
-            style,
-          );
-
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedIndex = index;
-              });
-              widget.onModeSelected(mode);
-            },
-            child: Container(
-              color: Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(mode.toUpperCase(), style: style),
-                  const SizedBox(height: 6),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeInOut,
-                    height: 3,
-                    width: isSelected ? textWidth : 0,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1CA4FF),
-                      borderRadius: BorderRadius.circular(2),
+      child: Stack(
+        children: [
+          ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            itemCount: widget.modes.length,
+            itemBuilder: (context, index) {
+              final mode = widget.modes[index];
+              return GestureDetector(
+                onTap: () {
+                  widget.onModeSelected(mode);
+                },
+                child: Padding(
+                  key: _keys[index],
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  child: Center(
+                    child: Text(
+                      mode.toUpperCase(),
+                      style: TextStyle(
+                        color: widget.selectedMode == mode
+                            ? Colors.white
+                            : Colors.white.withOpacity(0.5),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
+                      ),
                     ),
                   ),
-                ],
+                ),
+              );
+            },
+          ),
+          // Анимированная полоска-индикатор
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeInOut,
+            left: _indicatorLeft,
+            bottom: 6, // Отступ от нижнего края
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeInOut,
+              height: 3,
+              width: _indicatorWidth,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1CA4FF),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'package:eatune/managers/favorites_manager.dart';
 import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
@@ -7,7 +8,6 @@ import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 
 class TrackListWidget extends StatefulWidget {
-  // ИЗМЕНЕНИЕ: Принимаем новые параметры
   final String mode;
   final String? filterValue;
   final int limit;
@@ -29,8 +29,6 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   @override
   void initState() {
     super.initState();
-    // ИЗМЕНЕНИЕ: Запрашиваем треки у сервера с новыми параметрами
-    // Вся логика фильтрации теперь на стороне сервера
     _tracksFuture = ApiService.getTracks(
       mode: widget.mode,
       value: widget.filterValue,
@@ -155,69 +153,160 @@ class _TrackItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                track.coverUrl ?? '',
-                width: 50,
-                height: 50,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF374151),
-                    borderRadius: BorderRadius.circular(8.0),
+    return ValueListenableBuilder<List<Track>>(
+      valueListenable: FavoritesManager.notifier,
+      builder: (context, favoriteTracks, _) {
+        final isFavorite = FavoritesManager.isFavorite(track.id);
+        return InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    track.coverUrl ?? '',
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF374151),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: const Icon(Icons.music_note, color: Colors.grey),
+                    ),
                   ),
-                  child: const Icon(Icons.music_note, color: Colors.grey),
                 ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    track.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        track.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        track.artist,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    track.artist,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 14,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  track.duration,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 14,
                   ),
-                ],
-              ),
+                ),
+                _FavoriteButton(
+                  isFavorite: isFavorite,
+                  onPressed: () {
+                    final message = isFavorite
+                        ? 'Удалено из избранного'
+                        : 'Добавлено в избранное';
+                    FavoritesManager.toggleFavorite(track);
+                    _showCustomSnackBar(context, message);
+                  },
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Text(
-              track.duration,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 14,
-              ),
-            ),
-          ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FavoriteButton extends StatefulWidget {
+  final bool isFavorite;
+  final VoidCallback onPressed;
+
+  const _FavoriteButton({required this.isFavorite, required this.onPressed});
+
+  @override
+  State<_FavoriteButton> createState() => _FavoriteButtonState();
+}
+
+class _FavoriteButtonState extends State<_FavoriteButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animationController;
+  late final Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _scaleAnimation =
+        TweenSequence([
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 1.0, end: 1.3),
+            weight: 50,
+          ),
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 1.3, end: 1.0),
+            weight: 50,
+          ),
+        ]).animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+        );
+
+    if (widget.isFavorite) {
+      _animationController.value = 1.0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _FavoriteButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isFavorite != oldWidget.isFavorite) {
+      if (widget.isFavorite) {
+        _animationController.forward(from: 0.0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: ScaleTransition(
+        scale: _scaleAnimation,
+        child: Icon(
+          widget.isFavorite
+              ? Icons.favorite_rounded
+              : Icons.favorite_border_rounded,
         ),
       ),
+      color: widget.isFavorite ? Colors.redAccent : Colors.white54,
+      onPressed: widget.onPressed,
     );
   }
 }

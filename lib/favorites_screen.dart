@@ -122,13 +122,23 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 10),
-              const Text(
-                'FAVORITE LIST',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.5,
+              Container(
+                height: 40.0,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'FAVORITE LIST',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 9), // Невидимый отступ
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -354,7 +364,7 @@ class _TrackConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasCover = track.coverUrl != null && track.coverUrl!.isNotEmpty;
+    final bool hasCover = track.hasCover; // <<-- ИЗМЕНЕННАЯ СТРОКА
     return Dialog(
       elevation: 0,
       backgroundColor: Colors.transparent,

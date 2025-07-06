@@ -1,16 +1,13 @@
-// lib/home_page.dart
-
+import 'package:eatune/widgets/mode_selector_widget.dart';
+import 'package:eatune/widgets/year_browser_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
-
-import 'managers/queue_manager.dart';
-import 'search_page.dart';
-import 'favorites_screen.dart';
-import 'queue_page.dart';
 import 'track_list_widget.dart';
-import 'widgets/mode_selector_widget.dart';
-import 'widgets/year_browser_widget.dart';
+import 'queue_page.dart';
+import 'favorites_screen.dart';
+import 'search_page.dart';
+import 'managers/queue_manager.dart';
 
 class NoGlowScrollBehavior extends ScrollBehavior {
   @override
@@ -40,75 +37,20 @@ class _HomeContentState extends State<HomeContent> {
   late String _selectedMode;
   String? _selectedYear;
 
+  // ИЗМЕНЕНИЕ: Добавляем PageController для управления PageView
+  late final PageController _pageController;
+
   @override
   void initState() {
     super.initState();
     _selectedMode = _modes.first;
+    _pageController = PageController();
   }
 
-  Widget _buildBody() {
-    switch (_selectedMode) {
-      case 'Popular':
-        return TrackListWidget(
-          mode: 'popular',
-          limit: 50,
-          key: const ValueKey('popular'),
-        );
-      case 'All Tracks':
-        return TrackListWidget(
-          mode: 'all',
-          limit: 50,
-          key: const ValueKey('all'),
-        );
-      case 'By year':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            YearBrowserWidget(
-              onYearTapped: (year) {
-                setState(() {
-                  _selectedYear = year;
-                });
-              },
-            ),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Text(
-                _selectedYear == null
-                    ? 'CHOOSE YEAR'
-                    : 'HITS OF $_selectedYear',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.5,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: _selectedYear == null
-                    ? const Center(
-                        child: Text(
-                          "Выберите год из списка выше",
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      )
-                    : TrackListWidget(
-                        mode: 'year',
-                        filterValue: _selectedYear!,
-                        key: ValueKey(_selectedYear),
-                      ),
-              ),
-            ),
-          ],
-        );
-      default:
-        return const SizedBox.shrink();
-    }
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -118,21 +60,100 @@ class _HomeContentState extends State<HomeContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(height: 10),
           ModeSelectorWidget(
             modes: _modes,
             selectedMode: _selectedMode,
             onModeSelected: (mode) {
-              setState(() {
-                _selectedMode = mode;
-                _selectedYear = null;
-              });
+              final index = _modes.indexOf(mode);
+              // При нажатии на селектор, анимированно переключаем страницу
+              _pageController.animateToPage(
+                index,
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutCubic,
+              );
             },
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: _buildBody(),
+            // ИЗМЕНЕНИЕ: Заменяем AnimatedSwitcher на PageView для свайпов
+            child: PageView(
+              controller: _pageController,
+              onPageChanged: (index) {
+                // При свайпе, обновляем состояние селектора
+                setState(() {
+                  _selectedMode = _modes[index];
+                  _selectedYear = null; // Сбрасываем год при смене таба
+                });
+              },
+              children: [
+                // Страница 1: Popular
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: TrackListWidget(
+                    mode: 'popular',
+                    limit: 50,
+                    key: const ValueKey('popular'),
+                  ),
+                ),
+
+                // Страница 2: By Year
+                Column(
+                  key: const ValueKey('by_year'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    YearBrowserWidget(
+                      onYearTapped: (year) {
+                        setState(() {
+                          _selectedYear = year;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Text(
+                        _selectedYear == null
+                            ? 'CHOOSE YEAR'
+                            : 'HITS OF $_selectedYear',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: _selectedYear == null
+                            ? const Center(
+                                child: Text(
+                                  "Выберите год из списка выше",
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              )
+                            : TrackListWidget(
+                                mode: 'year',
+                                filterValue: _selectedYear!,
+                                key: ValueKey(_selectedYear),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Страница 3: All Tracks
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: TrackListWidget(
+                    mode: 'all',
+                    key: const ValueKey('all'),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

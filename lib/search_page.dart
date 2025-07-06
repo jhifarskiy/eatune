@@ -460,7 +460,7 @@ class _TrackConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasCover = track.coverUrl != null && track.coverUrl!.isNotEmpty;
+    final bool hasCover = track.hasCover; // <<-- ИЗМЕНЕННАЯ СТРОКА
     return Dialog(
       elevation: 0,
       backgroundColor: Colors.transparent,

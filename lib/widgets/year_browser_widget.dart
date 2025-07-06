@@ -10,8 +10,6 @@ class YearBrowserWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     // Генерируем список годов от 2024 до 2004
     final years = List.generate(21, (index) => (2024 - index).toString());
-    const coverBaseUrl =
-        'https://Eatune.s3.us-west-004.backblazeb2.com/covers/';
 
     return SizedBox(
       height: 120,
@@ -21,32 +19,35 @@ class YearBrowserWidget extends StatelessWidget {
         itemCount: years.length,
         itemBuilder: (context, index) {
           final year = years[index];
-          final coverUrl = '$coverBaseUrl$year.jpg';
 
           return GestureDetector(
             onTap: () => onYearTapped(year),
             child: Padding(
               padding: const EdgeInsets.only(right: 16),
+              // ИЗМЕНЕНО: Заменяем логику отображения картинки на кастомный контейнер
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16.0),
-                child: Image.network(
-                  coverUrl,
+                child: Container(
                   height: 120,
                   width: 120,
-                  fit: BoxFit.cover,
-                  // В случае ошибки загрузки, показываем текст с годом
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    height: 120,
-                    width: 120,
-                    color: Colors.grey[850],
-                    child: Center(
-                      child: Text(
-                        year,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        const Color(0xFF1CA4FF).withOpacity(0.8),
+                        const Color(0xFF0D325F),
+                      ],
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      year,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
                       ),
                     ),
                   ),

@@ -37,6 +37,17 @@ class Track {
     this.coverUrl,
   });
 
+  // НОВЫЙ МЕТОД ДЛЯ ПРОВЕРКИ ОБЛОЖКИ
+  bool get hasCover {
+    if (coverUrl == null || coverUrl!.isEmpty) return false;
+    // Проверяем, что это не наши служебные пометки
+    if (coverUrl == 'spotify_not_found' || coverUrl == 'not_found_anywhere') {
+      return false;
+    }
+    // Проверяем, что это похоже на настоящую ссылку
+    return coverUrl!.startsWith('http');
+  }
+
   factory Track.fromJson(Map<String, dynamic> json) {
     return Track(
       id: json['id']?.toString() ?? '',
@@ -50,7 +61,6 @@ class Track {
     );
   }
 
-  // --- ДОБАВЛЕН НЕДОСТАЮЩИЙ МЕТОД ---
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -63,8 +73,6 @@ class Track {
       'coverUrl': coverUrl,
     };
   }
-
-  // ------------------------------------
 }
 
 class ApiService {

@@ -25,6 +25,7 @@ build/
 /backend/npm-debug.log*
 /backend/yarn-debug.log*
 /backend/yarn-error.log*
+/backend/.env
 .pnp
 .pnp.js
 

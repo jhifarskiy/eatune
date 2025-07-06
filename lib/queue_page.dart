@@ -3,25 +3,11 @@ import 'package:eatune/managers/queue_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'api.dart';
+import 'home_page.dart'; // Импортируем для NoGlowScrollBehavior
 
-// Вспомогательный класс для отключения glow-эффекта
-class NoGlowScrollBehavior extends ScrollBehavior {
-  @override
-  Widget buildOverscrollIndicator(
-    BuildContext context,
-    Widget child,
-    ScrollableDetails details,
-  ) {
-    return child;
-  }
-}
-
-// Карточка для трека, который играет сейчас
 class _NowPlayingCard extends StatefulWidget {
   final Track track;
-
   const _NowPlayingCard({required this.track});
-
   @override
   State<_NowPlayingCard> createState() => _NowPlayingCardState();
 }
@@ -183,14 +169,27 @@ class QueuePage extends StatelessWidget {
         return ScrollConfiguration(
           behavior: NoGlowScrollBehavior(),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 10, 24, 85),
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
             children: [
-              _buildSectionTitle('Сейчас играет'),
+              const SizedBox(height: 10),
+              Container(
+                height: 40.0,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle('NOW PLAYING'),
+                    const SizedBox(
+                      height: 9,
+                    ), // Невидимый отступ, имитирующий синюю полосу
+                  ],
+                ),
+              ),
               const SizedBox(height: 12),
               _NowPlayingCard(track: nowPlaying),
               if (upNext.isNotEmpty) ...[
                 const SizedBox(height: 24),
-                _buildSectionTitle('Далее в очереди'),
+                _buildSectionTitle('UP NEXT'),
                 const SizedBox(height: 12),
                 ...upNext
                     .map(
@@ -199,6 +198,7 @@ class QueuePage extends StatelessWidget {
                     )
                     .toList(),
               ],
+              const SizedBox(height: 85),
             ],
           ),
         );
