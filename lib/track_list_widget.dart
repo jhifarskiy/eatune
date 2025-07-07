@@ -1,5 +1,6 @@
 import 'package:eatune/managers/favorites_manager.dart';
 import 'package:eatune/managers/my_orders_manager.dart';
+import 'package:eatune/managers/track_cache_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
 import 'package:eatune/widgets/track_confirmation_dialog.dart';
@@ -29,11 +30,17 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   @override
   void initState() {
     super.initState();
-    _tracksFuture = ApiService.getTracks(
-      mode: widget.mode,
-      value: widget.filterValue,
-      limit: widget.limit,
-    );
+    _tracksFuture = TrackCacheManager.getAllTracks();
+  }
+
+  @override
+  void didUpdateWidget(covariant TrackListWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.filterValue != oldWidget.filterValue) {
+      setState(() {
+        _tracksFuture = TrackCacheManager.getAllTracks();
+      });
+    }
   }
 
   void _showConfirmationModal(BuildContext context, Track track) {
@@ -128,12 +135,26 @@ class _TrackListWidgetState extends State<TrackListWidget> {
           );
         }
 
-        final tracks = snapshot.data!;
+        List<Track> displayedTracks = List.from(snapshot.data!);
+
+        if (widget.mode == 'year' && widget.filterValue != null) {
+          final yearNum = int.tryParse(widget.filterValue!);
+          if (yearNum != null) {
+            displayedTracks = displayedTracks
+                .where((t) => t.year == yearNum)
+                .toList();
+          }
+        }
+
+        if (widget.limit > 0 && displayedTracks.length > widget.limit) {
+          displayedTracks = displayedTracks.sublist(0, widget.limit);
+        }
+
         return ListView.builder(
           padding: EdgeInsets.zero,
-          itemCount: tracks.length,
+          itemCount: displayedTracks.length,
           itemBuilder: (context, index) {
-            final track = tracks[index];
+            final track = displayedTracks[index];
             return _TrackItem(
               track: track,
               onTap: () => _showConfirmationModal(context, track),

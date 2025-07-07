@@ -1,4 +1,3 @@
-import 'package:eatune/widgets/mode_selector_widget.dart';
 import 'package:eatune/widgets/year_browser_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -32,24 +31,33 @@ class HomeContent extends StatefulWidget {
   State<HomeContent> createState() => _HomeContentState();
 }
 
-class _HomeContentState extends State<HomeContent> {
-  final List<String> _modes = const ['Popular', 'By year', 'All Tracks'];
-  late String _selectedMode;
+// ИЗМЕНЕНИЕ: Используем SingleTickerProviderStateMixin для TabController
+class _HomeContentState extends State<HomeContent>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+  final List<String> _tabs = const ['Popular', 'By year', 'All Tracks'];
   String? _selectedYear;
-
-  // ИЗМЕНЕНИЕ: Добавляем PageController для управления PageView
-  late final PageController _pageController;
 
   @override
   void initState() {
     super.initState();
-    _selectedMode = _modes.first;
-    _pageController = PageController();
+    _tabController = TabController(length: _tabs.length, vsync: this);
+
+    // Добавляем листенер, чтобы сбрасывать выбранный год при переключении вкладок
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        if (_tabController.index != 1) {
+          setState(() {
+            _selectedYear = null;
+          });
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -61,31 +69,38 @@ class _HomeContentState extends State<HomeContent> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 10),
-          ModeSelectorWidget(
-            modes: _modes,
-            selectedMode: _selectedMode,
-            onModeSelected: (mode) {
-              final index = _modes.indexOf(mode);
-              // При нажатии на селектор, анимированно переключаем страницу
-              _pageController.animateToPage(
-                index,
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutCubic,
-              );
-            },
+
+          // ИЗМЕНЕНИЕ: Вместо кастомного виджета используем стандартный TabBar
+          Container(
+            height: 40,
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: TabBar(
+              controller: _tabController,
+              tabs: _tabs
+                  .map((label) => Tab(text: label.toUpperCase()))
+                  .toList(),
+              isScrollable: true,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white.withOpacity(0.5),
+              labelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.2,
+                fontFamily: 'Montserrat',
+              ),
+              indicatorColor: const Color(0xFF1CA4FF),
+              indicatorWeight: 3.0,
+              indicatorSize: TabBarIndicatorSize.label,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+              overlayColor: MaterialStateProperty.all(Colors.transparent),
+            ),
           ),
           const SizedBox(height: 16),
           Expanded(
-            // ИЗМЕНЕНИЕ: Заменяем AnimatedSwitcher на PageView для свайпов
-            child: PageView(
-              controller: _pageController,
-              onPageChanged: (index) {
-                // При свайпе, обновляем состояние селектора
-                setState(() {
-                  _selectedMode = _modes[index];
-                  _selectedYear = null; // Сбрасываем год при смене таба
-                });
-              },
+            // ИЗМЕНЕНИЕ: Вместо PageView используем TabBarView, который автоматически связан с TabBar
+            child: TabBarView(
+              controller: _tabController,
               children: [
                 // Страница 1: Popular
                 Padding(

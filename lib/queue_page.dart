@@ -3,7 +3,7 @@ import 'package:eatune/managers/queue_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'api.dart';
-import 'home_page.dart'; // Импортируем для NoGlowScrollBehavior
+import 'home_page.dart';
 
 class _NowPlayingCard extends StatefulWidget {
   final Track track;
@@ -64,7 +64,7 @@ class _NowPlayingCardState extends State<_NowPlayingCard> {
           children: [
             Row(
               children: [
-                _buildCoverImage(widget.track.coverUrl, 64, 12),
+                _buildCoverImage(widget.track, 64, 12),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -177,12 +177,7 @@ class QueuePage extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionTitle('NOW PLAYING'),
-                    const SizedBox(
-                      height: 9,
-                    ), // Невидимый отступ, имитирующий синюю полосу
-                  ],
+                  children: [_buildSectionTitle('NOW PLAYING')],
                 ),
               ),
               const SizedBox(height: 12),
@@ -231,7 +226,7 @@ Widget _buildQueueItem(Track track, int position) {
           style: TextStyle(fontSize: 16, color: Colors.white.withOpacity(0.5)),
         ),
         const SizedBox(width: 16),
-        _buildCoverImage(track.coverUrl, 48, 8),
+        _buildCoverImage(track, 48, 8),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -272,29 +267,37 @@ Widget _buildQueueItem(Track track, int position) {
   );
 }
 
-Widget _buildCoverImage(String? coverUrl, double size, double borderRadius) {
+Widget _buildCoverImage(Track track, double size, double borderRadius) {
+  final bool hasValidUrl = track.hasCover;
+
   return ClipRRect(
     borderRadius: BorderRadius.circular(borderRadius),
-    child: Image.network(
-      coverUrl ?? 'invalid_url',
-      width: size,
-      height: size,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: const Color(0xFF4B5563),
-            borderRadius: BorderRadius.circular(borderRadius),
-          ),
-          child: Icon(
-            Icons.music_note_rounded,
-            color: Colors.white.withOpacity(0.7),
-            size: size * 0.5,
-          ),
-        );
-      },
+    child: hasValidUrl
+        ? Image.network(
+            track.coverUrl!,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildPlaceholderIcon(size, borderRadius);
+            },
+          )
+        : _buildPlaceholderIcon(size, borderRadius),
+  );
+}
+
+Widget _buildPlaceholderIcon(double size, double borderRadius) {
+  return Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: const Color(0xFF4B5563),
+      borderRadius: BorderRadius.circular(borderRadius),
+    ),
+    child: Icon(
+      Icons.music_note_rounded,
+      color: Colors.white.withOpacity(0.7),
+      size: size * 0.5,
     ),
   );
 }

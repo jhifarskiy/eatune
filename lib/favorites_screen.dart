@@ -7,7 +7,6 @@ import 'package:shimmer/shimmer.dart';
 import 'api.dart';
 import 'managers/favorites_manager.dart';
 
-// Вспомогательный класс для отключения glow-эффекта
 class NoGlowScrollBehavior extends ScrollBehavior {
   @override
   Widget buildOverscrollIndicator(
@@ -137,7 +136,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         letterSpacing: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 9), // Невидимый отступ
                   ],
                 ),
               ),
@@ -188,69 +186,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 8.0),
                             child: Row(
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    track.coverUrl ?? '',
-                                    width: 50,
-                                    height: 50,
-                                    fit: BoxFit.cover,
-                                    frameBuilder:
-                                        (
-                                          context,
-                                          child,
-                                          frame,
-                                          wasSynchronouslyLoaded,
-                                        ) {
-                                          if (wasSynchronouslyLoaded) {
-                                            return child;
-                                          }
-                                          return AnimatedOpacity(
-                                            opacity: frame == null ? 0 : 1,
-                                            duration: const Duration(
-                                              milliseconds: 300,
-                                            ),
-                                            curve: Curves.easeOut,
-                                            child: child,
-                                          );
-                                        },
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                          if (loadingProgress == null) {
-                                            return child;
-                                          }
-                                          return Shimmer.fromColors(
-                                            baseColor: Colors.grey[850]!,
-                                            highlightColor: Colors.grey[800]!,
-                                            child: Container(
-                                              width: 50,
-                                              height: 50,
-                                              decoration: BoxDecoration(
-                                                color: Colors.grey[850],
-                                                borderRadius:
-                                                    BorderRadius.circular(8.0),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Container(
-                                              width: 50,
-                                              height: 50,
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF374151),
-                                                borderRadius:
-                                                    BorderRadius.circular(8.0),
-                                              ),
-                                              child: const Icon(
-                                                Icons.music_note,
-                                                color: Colors.grey,
-                                                size: 24,
-                                              ),
-                                            ),
-                                  ),
-                                ),
+                                _buildCoverImage(track),
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
@@ -321,6 +257,62 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 }
 
+Widget _buildCoverImage(Track track) {
+  const double size = 50;
+  const double borderRadius = 8;
+  final bool hasValidUrl = track.hasCover;
+
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(borderRadius),
+    child: hasValidUrl
+        ? Image.network(
+            track.coverUrl!,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+              if (wasSynchronouslyLoaded) return child;
+              return AnimatedOpacity(
+                opacity: frame == null ? 0 : 1,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                child: child,
+              );
+            },
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Shimmer.fromColors(
+                baseColor: Colors.grey[850]!,
+                highlightColor: Colors.grey[800]!,
+                child: Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[850],
+                    borderRadius: BorderRadius.circular(borderRadius),
+                  ),
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) =>
+                _buildPlaceholderIcon(size, borderRadius),
+          )
+        : _buildPlaceholderIcon(size, borderRadius),
+  );
+}
+
+Widget _buildPlaceholderIcon(double size, double borderRadius) {
+  return Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: const Color(0xFF374151),
+      borderRadius: BorderRadius.circular(borderRadius),
+    ),
+    child: Icon(Icons.music_note, color: Colors.grey, size: size * 0.6),
+  );
+}
+
 class _AnimatedTrackItem extends StatefulWidget {
   final VoidCallback onTap;
   final Widget child;
@@ -364,7 +356,7 @@ class _TrackConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasCover = track.hasCover; // <<-- ИЗМЕНЕННАЯ СТРОКА
+    final bool hasCover = track.hasCover;
     return Dialog(
       elevation: 0,
       backgroundColor: Colors.transparent,
