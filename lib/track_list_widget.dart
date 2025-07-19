@@ -3,6 +3,7 @@ import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/track_cache_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
+import 'package:eatune/widgets/pressable_animated_widget.dart';
 import 'package:eatune/widgets/track_confirmation_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
@@ -24,8 +25,12 @@ class TrackListWidget extends StatefulWidget {
   State<TrackListWidget> createState() => _TrackListWidgetState();
 }
 
-class _TrackListWidgetState extends State<TrackListWidget> {
+class _TrackListWidgetState extends State<TrackListWidget>
+    with AutomaticKeepAliveClientMixin {
   late Future<List<Track>> _tracksFuture;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -36,7 +41,8 @@ class _TrackListWidgetState extends State<TrackListWidget> {
   @override
   void didUpdateWidget(covariant TrackListWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.filterValue != oldWidget.filterValue) {
+    if (widget.filterValue != oldWidget.filterValue ||
+        widget.mode != oldWidget.mode) {
       setState(() {
         _tracksFuture = TrackCacheManager.getAllTracks();
       });
@@ -110,6 +116,7 @@ class _TrackListWidgetState extends State<TrackListWidget> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return FutureBuilder<List<Track>>(
       future: _tracksFuture,
       builder: (context, snapshot) {
@@ -144,6 +151,13 @@ class _TrackListWidgetState extends State<TrackListWidget> {
                 .where((t) => t.year == yearNum)
                 .toList();
           }
+        } else if (widget.mode == 'genre' && widget.filterValue != null) {
+          displayedTracks = displayedTracks
+              .where(
+                (t) =>
+                    t.genre?.toLowerCase() == widget.filterValue!.toLowerCase(),
+              )
+              .toList();
         }
 
         if (widget.limit > 0 && displayedTracks.length > widget.limit) {
@@ -178,9 +192,8 @@ class _TrackItem extends StatelessWidget {
       valueListenable: FavoritesManager.notifier,
       builder: (context, favoriteTracks, _) {
         final isFavorite = FavoritesManager.isFavorite(track.id);
-        return InkWell(
+        return PressableAnimatedWidget(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Row(
@@ -232,11 +245,14 @@ class _TrackItem extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  track.duration,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 14,
+                SizedBox(
+                  width: 45,
+                  child: Text(
+                    track.duration,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 14,
+                    ),
                   ),
                 ),
                 _FavoriteButton(
@@ -317,17 +333,20 @@ class _FavoriteButtonState extends State<_FavoriteButton>
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      icon: ScaleTransition(
-        scale: _scaleAnimation,
-        child: Icon(
-          widget.isFavorite
-              ? Icons.favorite_rounded
-              : Icons.favorite_border_rounded,
+    return PressableAnimatedWidget(
+      onTap: widget.onPressed,
+      child: Container(
+        padding: const EdgeInsets.all(8.0),
+        child: ScaleTransition(
+          scale: _scaleAnimation,
+          child: Icon(
+            widget.isFavorite
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+            color: widget.isFavorite ? Colors.redAccent : Colors.white54,
+          ),
         ),
       ),
-      color: widget.isFavorite ? Colors.redAccent : Colors.white54,
-      onPressed: widget.onPressed,
     );
   }
 }

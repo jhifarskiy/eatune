@@ -147,11 +147,25 @@ class _NowPlayingCardState extends State<_NowPlayingCard> {
   }
 }
 
-class QueuePage extends StatelessWidget {
+// ИЗМЕНЕНИЕ: Превращаем в StatefulWidget
+class QueuePage extends StatefulWidget {
   const QueuePage({super.key});
 
   @override
+  State<QueuePage> createState() => _QueuePageState();
+}
+
+// ИЗМЕНЕНИЕ: Добавляем AutomaticKeepAliveClientMixin
+class _QueuePageState extends State<QueuePage>
+    with AutomaticKeepAliveClientMixin {
+  // ИЗМЕНЕНИЕ: Указываем, что состояние этого виджета нужно сохранять
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    // ИЗМЕНЕНИЕ: Обязательный вызов для AutomaticKeepAliveClientMixin
+    super.build(context);
     return Consumer<QueueManager>(
       builder: (context, queueManager, child) {
         if (!queueManager.isConnected) {

@@ -5,6 +5,7 @@ import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/track_cache_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
+import 'package:eatune/widgets/pressable_animated_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'api.dart';
@@ -275,7 +276,7 @@ class _SearchPageState extends State<SearchPage> {
             valueListenable: FavoritesManager.notifier,
             builder: (context, favorites, child) {
               final isFavorite = FavoritesManager.isFavorite(track.id);
-              return InkWell(
+              return PressableAnimatedWidget(
                 onTap: () => _showConfirmationModal(track),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -352,16 +353,19 @@ class _SearchPageState extends State<SearchPage> {
                           ],
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(
-                          isFavorite ? Icons.favorite : Icons.favorite_border,
-                          color: isFavorite
-                              ? Colors.redAccent
-                              : Colors.white.withOpacity(0.5),
-                        ),
-                        onPressed: () {
+                      PressableAnimatedWidget(
+                        onTap: () {
                           FavoritesManager.toggleFavorite(track);
                         },
+                        child: Container(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Icon(
+                            isFavorite ? Icons.favorite : Icons.favorite_border,
+                            color: isFavorite
+                                ? Colors.redAccent
+                                : Colors.white.withOpacity(0.5),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -460,7 +464,7 @@ class _TrackConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasCover = track.hasCover; // <<-- ИЗМЕНЕННАЯ СТРОКА
+    final bool hasCover = track.hasCover;
     return Dialog(
       elevation: 0,
       backgroundColor: Colors.transparent,
@@ -578,7 +582,7 @@ class __ConfirmAddButtonState extends State<_ConfirmAddButton> {
           borderRadius: BorderRadius.circular(30),
         ),
         child: Center(
-          child: _isAdding
+          child: _isAdded
               ? const Icon(Icons.check, color: Color(0xFF1CA4FF))
               : const Text(
                   'Добавить',

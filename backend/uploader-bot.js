@@ -9,31 +9,30 @@ const { exec } = require('child_process');
 // --- КОНФИГУРАЦИЯ ---
 const WATCH_FOLDER = './tracks-to-upload';
 const UPLOADED_FOLDER = path.join(WATCH_FOLDER, 'uploaded');
+// ИЗМЕНЕНИЕ: Устанавливаем лимит одновременных загрузок
+const CONCURRENCY_LIMIT = 10;
 
-const B2_CONFIG = {
-    endpoint: 'https://s3.us-west-004.backblazeb2.com',
-    region: 'us-west-004',
+const R2_CONFIG = {
+    endpoint: 'https://e51a1f68ce64b0c69f6588f1e885c3ff.r2.cloudflarestorage.com',
+    region: 'auto',
     credentials: {
-        accessKeyId: process.env.B2_ACCESS_KEY_ID,
-        secretAccessKey: process.env.B2_SECRET_ACCESS_KEY,
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
     }
 };
-const BUCKET_NAME = 'Eatune';
+const BUCKET_NAME = 'eatune';
 
-// --- Проверка наличия ключей ---
-if (!B2_CONFIG.credentials.accessKeyId || !B2_CONFIG.credentials.secretAccessKey || !process.env.MONGO_PASSWORD) {
-    console.error('❌ Ошибка: Ключи доступа или пароль от MongoDB не предоставлены.');
-    console.error('Пожалуйста, запустите скрипт с переменными окружения:');
-    console.error('B2_ACCESS_KEY_ID="..." B2_SECRET_ACCESS_KEY="..." MONGO_PASSWORD="..." node uploader-bot.js');
+if (!R2_CONFIG.credentials.accessKeyId || !R2_CONFIG.credentials.secretAccessKey || !process.env.MONGO_PASSWORD) {
+    console.error('❌ Ошибка: Ключи доступа R2 или пароль от MongoDB не предоставлены.');
     process.exit(1);
 }
 
-const s3Client = new S3Client(B2_CONFIG);
+const s3Client = new S3Client(R2_CONFIG);
 
 const runDbSync = () => {
-    console.log('🔄 Запускаю синхронизацию с базой данных (balanced-sync.js)...');
+    console.log('🔄 Запускаю финальную синхронизацию с базой данных (smart-sync.js)...');
     
-    const command = `MONGO_PASSWORD="${process.env.MONGO_PASSWORD}" node scripts/balanced-sync.js`;
+    const command = `R2_ACCESS_KEY_ID="${process.env.R2_ACCESS_KEY_ID}" R2_SECRET_ACCESS_KEY="${process.env.R2_SECRET_ACCESS_KEY}" MONGO_PASSWORD="${process.env.MONGO_PASSWORD}" node scripts/smart-sync.js`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
@@ -44,40 +43,30 @@ const runDbSync = () => {
             console.error(` stderr при синхронизации: ${stderr}`);
         }
         console.log(`📡 stdout синхронизации:\n${stdout}`);
-        console.log('✅ Синхронизация с базой данных завершена.');
+        console.log('✅ Финальная синхронизация с базой данных завершена.');
     });
 };
 
 const uploadFile = async (filePath) => {
-    // ИЗМЕНЕНИЕ №1: Создаем ключ для B2, сохраняя структуру папок
-    // path.relative создает относительный путь, например: "хиты/2023/трек.mp3"
-    // .replace(/\\/g, '/') заменяет бэкслэши (для Windows) на слэши, как принято в S3
     const s3Key = path.relative(WATCH_FOLDER, filePath).replace(/\\/g, '/');
 
-    console.log(`\n⏳ Обнаружен новый файл: ${filePath}. Начинаю загрузку...`);
-    console.log(`   -> Ключ в бакете будет: ${s3Key}`);
+    console.log(`  -> 📤 Загружаю: ${path.basename(filePath)}`);
 
     try {
         const fileContent = await fs.readFile(filePath);
         const uploadParams = {
             Bucket: BUCKET_NAME,
-            Key: s3Key, // Используем новый ключ со структурой папок
+            Key: s3Key,
             Body: fileContent,
         };
 
         await s3Client.send(new PutObjectCommand(uploadParams));
-        console.log(`✅ Файл "${s3Key}" успешно загружен в бакет "${BUCKET_NAME}".`);
-
-        // Создаем необходимую структуру папок в 'uploaded'
+        
         const newPath = path.join(UPLOADED_FOLDER, s3Key);
         await fs.mkdir(path.dirname(newPath), { recursive: true });
         
-        // Перемещаем файл
         await fs.rename(filePath, newPath);
-        console.log(`➡️ Файл перемещен в: ${newPath}`);
-
-        runDbSync();
-
+        // console.log(`  -> ✅ Успешно загружен и перемещен: ${s3Key}`);
     } catch (err) {
         console.error(`❌ Ошибка при обработке файла "${filePath}":`, err);
     }
@@ -88,17 +77,37 @@ const startBot = async () => {
     await fs.mkdir(UPLOADED_FOLDER, { recursive: true });
 
     console.log(`🤖 Бот-загрузчик запущен.`);
-    console.log(`📂 Слежу за папкой: ${path.resolve(WATCH_FOLDER)} (включая все подпапки)`);
+    console.log(`📂 Сканирую папку: ${path.resolve(WATCH_FOLDER)}...`);
 
-    // ИЗМЕНЕНИЕ №2: Убираем `depth: 0`, чтобы следить за файлами во вложенных папках
+    // ИЗМЕНЕНИЕ: Новая логика с обработкой пачками
+    const fileQueue = [];
     const watcher = chokidar.watch(WATCH_FOLDER, {
         ignored: [/(^|[\/\\])\../, UPLOADED_FOLDER],
-        persistent: true,
-        ignoreInitial: true,
+        persistent: false, // Бот отработает один раз и завершится
+        ignoreInitial: false, 
     });
 
     watcher.on('add', (filePath) => {
-        setTimeout(() => uploadFile(filePath), 1000);
+        // Просто собираем все найденные файлы в очередь
+        fileQueue.push(filePath);
+    });
+
+    watcher.on('ready', async () => {
+        console.log(`🔍 Найдено ${fileQueue.length} файлов для загрузки.`);
+        console.log(`🚀 Начинаю загрузку пачками по ${CONCURRENCY_LIMIT} файлов.`);
+
+        for (let i = 0; i < fileQueue.length; i += CONCURRENCY_LIMIT) {
+            const chunk = fileQueue.slice(i, i + CONCURRENCY_LIMIT);
+            console.log(`\n--- Обработка пачки ${Math.floor(i / CONCURRENCY_LIMIT) + 1} из ${Math.ceil(fileQueue.length / CONCURRENCY_LIMIT)} ---`);
+            
+            const uploadPromises = chunk.map(filePath => uploadFile(filePath));
+            await Promise.all(uploadPromises);
+            
+            console.log(`--- ✅ Пачка завершена ---`);
+        }
+        
+        console.log('\n\n🎉 Все файлы успешно загружены!');
+        runDbSync();
     });
 
     watcher.on('error', (error) => console.error(`❌ Ошибка воркера: ${error}`));

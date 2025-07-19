@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/venue_session_manager.dart';
 import 'package:eatune/widgets/cooldown_dialog.dart';
+import 'package:eatune/widgets/pressable_animated_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'api.dart';
@@ -46,7 +47,13 @@ class FavoritesScreen extends StatefulWidget {
   State<FavoritesScreen> createState() => _FavoritesScreenState();
 }
 
-class _FavoritesScreenState extends State<FavoritesScreen> {
+// ИЗМЕНЕНИЕ: Добавляем AutomaticKeepAliveClientMixin
+class _FavoritesScreenState extends State<FavoritesScreen>
+    with AutomaticKeepAliveClientMixin {
+  // ИЗМЕНЕНИЕ: Указываем, что состояние этого виджета нужно сохранять
+  @override
+  bool get wantKeepAlive => true;
+
   void _showConfirmationModal(Track track) {
     showGeneralDialog(
       context: context,
@@ -112,6 +119,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ИЗМЕНЕНИЕ: Обязательный вызов для AutomaticKeepAliveClientMixin
+    super.build(context);
     return ValueListenableBuilder<List<Track>>(
       valueListenable: FavoritesManager.notifier,
       builder: (context, favoriteTracks, _) {
@@ -180,7 +189,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       itemCount: favoriteTracks.length,
                       itemBuilder: (context, index) {
                         final track = favoriteTracks[index];
-                        return _AnimatedTrackItem(
+                        return PressableAnimatedWidget(
                           onTap: () => _showConfirmationModal(track),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -218,27 +227,33 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 16),
-                                Text(
-                                  track.duration,
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.5),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
+                                SizedBox(
+                                  width: 45,
+                                  child: Text(
+                                    track.duration,
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.5),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.favorite,
-                                    color: Colors.redAccent,
-                                  ),
-                                  onPressed: () {
+                                PressableAnimatedWidget(
+                                  onTap: () {
                                     FavoritesManager.removeFavorite(track.id);
                                     _showCustomSnackBar(
                                       context,
                                       'Удалено из избранного',
                                     );
                                   },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: const Icon(
+                                      Icons.favorite,
+                                      color: Colors.redAccent,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -311,38 +326,6 @@ Widget _buildPlaceholderIcon(double size, double borderRadius) {
     ),
     child: Icon(Icons.music_note, color: Colors.grey, size: size * 0.6),
   );
-}
-
-class _AnimatedTrackItem extends StatefulWidget {
-  final VoidCallback onTap;
-  final Widget child;
-
-  const _AnimatedTrackItem({required this.onTap, required this.child});
-
-  @override
-  __AnimatedTrackItemState createState() => __AnimatedTrackItemState();
-}
-
-class __AnimatedTrackItemState extends State<_AnimatedTrackItem> {
-  bool _isPressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _isPressed = false),
-      child: AnimatedScale(
-        scale: _isPressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        child: widget.child,
-      ),
-    );
-  }
 }
 
 class _TrackConfirmationDialog extends StatelessWidget {
