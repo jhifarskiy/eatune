@@ -1,3 +1,4 @@
+// lib/api.dart
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'managers/device_id_manager.dart';
@@ -37,26 +38,25 @@ class Track {
     this.coverUrl,
   });
 
-  // НОВЫЙ МЕТОД ДЛЯ ПРОВЕРКИ ОБЛОЖКИ
   bool get hasCover {
     if (coverUrl == null || coverUrl!.isEmpty) return false;
-    // Проверяем, что это не наши служебные пометки
     if (coverUrl == 'spotify_not_found' || coverUrl == 'not_found_anywhere') {
       return false;
     }
-    // Проверяем, что это похоже на настоящую ссылку
     return coverUrl!.startsWith('http');
   }
 
   factory Track.fromJson(Map<String, dynamic> json) {
     return Track(
-      id: json['id']?.toString() ?? '',
+      // ИЗМЕНЕНИЕ: Используем '_id' если 'id' отсутствует для совместимости
+      id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
       title: json['title'] ?? 'Unknown Title',
       artist: json['artist'] ?? 'Unknown Artist',
       duration: json['duration'] ?? '0:00',
       genre: json['genre'],
       year: json['year'],
-      trackUrl: json['url'] ?? json['trackUrl'],
+      // ИЗМЕНЕНИЕ: Используем 'url' как запасной вариант для 'trackUrl'
+      trackUrl: json['trackUrl'] ?? json['url'],
       coverUrl: json['coverUrl'],
     );
   }
@@ -78,21 +78,11 @@ class Track {
 class ApiService {
   static const String baseUrl = 'https://eatune-api.onrender.com';
 
-  static Future<List<Track>> getTracks({
-    String mode = 'all',
-    String? value,
-    int limit = 0,
-  }) async {
+  // Получение всех треков для медиатеки
+  static Future<List<Track>> getAllTracks() async {
     try {
-      final queryParams = {
-        'mode': mode,
-        if (value != null) 'value': value,
-        if (limit > 0) 'limit': limit.toString(),
-      };
-
-      final uri = Uri.parse(
-        '$baseUrl/tracks',
-      ).replace(queryParameters: queryParams);
+      // ИЗМЕНЕНИЕ: Указываем новый, правильный адрес /api/tracks
+      final uri = Uri.parse('$baseUrl/api/tracks');
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {
@@ -100,15 +90,12 @@ class ApiService {
         return data.map((json) => Track.fromJson(json)).toList();
       }
     } catch (e) {
-      print('Error fetching tracks: $e');
+      print('Error fetching all tracks: $e');
     }
     return [];
   }
 
-  static Future<List<Track>> getAllTracks() async {
-    return getTracks(mode: 'all');
-  }
-
+  // Добавление трека в очередь
   static Future<ApiResponse> addToQueue({
     required String trackId,
     required String venueId,
@@ -122,8 +109,9 @@ class ApiService {
     }
 
     try {
+      // ИЗМЕНЕНИЕ: Указываем новый, правильный адрес /api/queue/add
       final response = await http.post(
-        Uri.parse('$baseUrl/queue'),
+        Uri.parse('$baseUrl/api/queue/add'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'id': trackId,

@@ -54,7 +54,7 @@
         #now-playing-card .info h2 { margin-bottom: 5px; }
         #now-playing-card .info p { color: var(--text-secondary); }
         .progress-container { height: 5px; background-color: rgba(255,255,255,0.2); border-radius: 2.5px; overflow: hidden; margin: 10px 0; }
-        #progress-bar { width: 0%; height: 100%; background-color: var(--primary); transition: width 0.5s linear; }
+        #progress-bar { width: 0%; height: 100%; background-color: var(--primary); }
         .time-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); }
         .controls { display: flex; justify-content: center; align-items: center; margin-top: 15px; }
         .control-button { background: none; border: 2px solid var(--text-secondary); color: var(--text-secondary); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; margin: 0 10px; display: flex; justify-content: center; align-items: center; font-size: 20px; transition: all 0.2s; }
@@ -79,14 +79,12 @@
     </style>
 </head>
 <body>
-
     <div id="login-container" class="login-container">
         <h1>Вход для персонала</h1>
         <input type="text" id="venueId" placeholder="Введите ID заведения">
         <br>
         <button id="connect-button">Подключиться</button>
     </div>
-
     <div id="main-grid" class="main-grid hidden">
         <div class="panel left-panel">
             <div id="now-playing-card" class="card">
@@ -125,67 +123,40 @@
         </div>
     </div>
 
-    <audio id="audio-player"></audio>
+    <audio id="audio-player" crossorigin="anonymous"></audio>
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // DOM Elements
-        const loginContainer = document.getElementById('login-container');
-        const mainGrid = document.getElementById('main-grid');
-        const venueIdInput = document.getElementById('venueId');
-        const connectButton = document.getElementById('connect-button');
-        const audio = document.getElementById('audio-player');
-        const coverArt = document.getElementById('cover-art');
-        const titleEl = document.getElementById('title');
-        const artistEl = document.getElementById('artist');
-        const progressBar = document.getElementById('progress-bar');
-        const currentTimeEl = document.getElementById('current-time');
-        const totalTimeEl = document.getElementById('total-time');
-        const playPauseBtn = document.getElementById('play-pause-button');
-        const nextBtn = document.getElementById('next-button');
-        const prevBtn = document.getElementById('prev-button');
-        const tabButtons = document.querySelectorAll('.tab-button');
-        const queueTab = document.getElementById('queue-tab');
-        const historyTab = document.getElementById('history-tab');
-        const qrTab = document.getElementById('qr-tab');
-        const qrCodeContainer = document.getElementById('qr-code-container');
-        const searchInput = document.getElementById('search-library');
-        const libraryList = document.getElementById('library-list');
+        const loginContainer = document.getElementById('login-container'), mainGrid = document.getElementById('main-grid'),
+        venueIdInput = document.getElementById('venueId'), connectButton = document.getElementById('connect-button'),
+        audio = document.getElementById('audio-player'), coverArt = document.getElementById('cover-art'),
+        titleEl = document.getElementById('title'), artistEl = document.getElementById('artist'),
+        progressBar = document.getElementById('progress-bar'), currentTimeEl = document.getElementById('current-time'),
+        totalTimeEl = document.getElementById('total-time'), playPauseBtn = document.getElementById('play-pause-button'),
+        nextBtn = document.getElementById('next-button'), prevBtn = document.getElementById('prev-button'),
+        tabButtons = document.querySelectorAll('.tab-button'), queueTab = document.getElementById('queue-tab'),
+        historyTab = document.getElementById('history-tab'), qrTab = document.getElementById('qr-tab'),
+        qrCodeContainer = document.getElementById('qr-code-container'), searchInput = document.getElementById('search-library'),
+        libraryList = document.getElementById('library-list');
 
-        // State
-        let ws;
-        let currentTrack = null;
-        let currentVenueId = '';
-        let fullLibrary = [];
-        let isPlaying = false;
+        let ws, currentTrack = null, currentVenueId = '', fullLibrary = [], isPlaying = false;
 
-        // --- INIT & CONNECTION ---
         connectButton.addEventListener('click', () => {
             const venueId = venueIdInput.value.trim();
-            if (venueId) {
-                // Unlock audio context
-                audio.play().catch(() => {});
-                audio.pause();
-                
-                currentVenueId = venueId;
-                connectWebSocket(venueId);
-                loadFullLibrary();
-                generateQRCode(venueId);
-            } else {
-                alert('Пожалуйста, введите ID заведения.');
-            }
+            if (!venueId) return alert('Пожалуйста, введите ID заведения.');
+            
+            audio.play().catch(() => {}); audio.pause();
+            currentVenueId = venueId;
+            connectWebSocket(venueId);
+            loadFullLibrary();
+            generateQRCode(venueId);
         });
 
         function connectWebSocket(venueId) {
             if (ws) ws.close();
             const wsUrl = `wss://eatune-api.onrender.com?venueId=${venueId}`;
             ws = new WebSocket(wsUrl);
-
-            ws.onopen = () => {
-                loginContainer.classList.add('hidden');
-                mainGrid.classList.remove('hidden');
-                fetchHistory();
-            };
+            ws.onopen = () => { loginContainer.classList.add('hidden'); mainGrid.classList.remove('hidden'); fetchHistory(); };
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'queue_update') handleQueueUpdate(data.queue || []);
@@ -194,11 +165,7 @@
                     if (data.action === 'pause') pauseAudio();
                 }
             };
-            ws.onclose = () => {
-                loginContainer.classList.remove('hidden');
-                mainGrid.classList.add('hidden');
-                currentTrack = null; resetPlayerUI();
-            };
+            ws.onclose = () => { loginContainer.classList.remove('hidden'); mainGrid.classList.add('hidden'); currentTrack = null; resetPlayerUI(); };
             ws.onerror = (error) => console.error('WebSocket Error:', error);
         }
 
@@ -210,11 +177,9 @@
             } catch (error) { console.error("Failed to load library:", error); }
         }
 
-        // --- UI & PLAYER LOGIC ---
         function handleQueueUpdate(queue) {
             renderQueueList(queue.slice(1));
             const newTrack = queue.length > 0 ? queue[0] : null;
-
             if (newTrack && (!currentTrack || currentTrack.id !== newTrack.id)) {
                 loadTrack(newTrack);
             } else if (!newTrack) {
@@ -226,89 +191,35 @@
         function loadTrack(track) {
             updatePlayerUI(track);
             audio.src = track.trackUrl;
-            if (isPlaying) playAudio();
-            else playPauseBtn.textContent = '▶';
+            if (isPlaying) playAudio(); else playPauseBtn.textContent = '▶';
         }
 
         function playAudio() {
-            if (!currentTrack) return;
-            audio.play().then(() => {
-                isPlaying = true;
-                playPauseBtn.textContent = '⏸';
-            }).catch(e => console.error("Play error", e));
+            if (!currentTrack || !audio.src) return;
+            audio.play().then(() => { isPlaying = true; playPauseBtn.textContent = '⏸'; }).catch(e => console.error("Play error:", e));
         }
 
-        function pauseAudio() {
-            audio.pause();
-            isPlaying = false;
-            playPauseBtn.textContent = '▶';
-        }
+        function pauseAudio() { audio.pause(); isPlaying = false; playPauseBtn.textContent = '▶'; }
 
         function renderTrackItem(track, type) {
             const item = document.createElement('div');
             item.className = 'track-item';
             let actionsHtml = '';
+            if (type === 'library') actionsHtml = `<button class="action-button" title="Играть следующим" onclick="eatune.onPlayNext('${track.id}')">⏯️</button><button class="action-button" title="Добавить в очередь" onclick="eatune.onAddToQueue('${track.id}')">➕</button>`;
+            else if (type === 'queue') actionsHtml = `<button class="action-button danger" title="Удалить из очереди" onclick="eatune.onRemoveFromQueue('${track.id}')">✖️</button>`;
+            else if (type === 'history') actionsHtml = `<button class="action-button" title="Добавить снова" onclick="eatune.onAddToQueue('${track.id}')">🔁</button>`;
 
-            if (type === 'library') {
-                actionsHtml = `
-                    <button class="action-button" title="Играть следующим" onclick="window.eatune.onPlayNext('${track.id}')">⏯️</button>
-                    <button class="action-button" title="Добавить в очередь" onclick="window.eatune.onAddToQueue('${track.id}')">➕</button>`;
-            } else if (type === 'queue') {
-                actionsHtml = `<button class="action-button danger" title="Удалить из очереди" onclick="window.eatune.onRemoveFromQueue('${track.id}')">✖️</button>`;
-            } else if (type === 'history') {
-                actionsHtml = `<button class="action-button" title="Добавить снова" onclick="window.eatune.onAddToQueue('${track.id}')">🔁</button>`;
-            }
-
-            item.innerHTML = `
-                <img class="cover" src="${track.coverUrl || ''}" alt="" onerror="this.style.visibility='hidden'">
-                <div class="info">
-                    <strong>${track.title}</strong>
-                    <p>${track.artist}</p>
-                </div>
-                <div class="actions">
-                    ${track.isBackgroundTrack === false ? `<span class="requested-by">Заказ</span>` : ''}
-                    ${actionsHtml}
-                </div>`;
+            item.innerHTML = `<img class="cover" src="${track.coverUrl || ''}" alt="" onerror="this.style.visibility='hidden'"><div class="info"><strong>${track.title}</strong><p>${track.artist}</p></div><div class="actions">${track.isBackgroundTrack === false ? `<span class="requested-by">Заказ</span>` : ''}${actionsHtml}</div>`;
             return item;
         }
 
-        function renderLibraryList(tracks) {
-            libraryList.innerHTML = '';
-            tracks.forEach(track => libraryList.appendChild(renderTrackItem(track, 'library')));
-        }
-        
-        function renderQueueList(queue) {
-            queueTab.innerHTML = '';
-            if (queue.length > 0) {
-                queue.forEach(track => queueTab.appendChild(renderTrackItem(track, 'queue')));
-            } else {
-                queueTab.innerHTML = '<p style="padding: 10px;">Очередь пуста</p>';
-            }
-        }
+        function renderLibraryList(tracks) { libraryList.innerHTML = ''; tracks.forEach(track => libraryList.appendChild(renderTrackItem(track, 'library'))); }
+        function renderQueueList(queue) { queueTab.innerHTML = ''; if (queue.length > 0) queue.forEach(track => queueTab.appendChild(renderTrackItem(track, 'queue'))); else queueTab.innerHTML = '<p style="padding: 10px;">Очередь пуста</p>'; }
+        function updatePlayerUI(track) { titleEl.textContent = track.title; artistEl.textContent = track.artist; coverArt.src = track.coverUrl || ''; coverArt.onerror = () => { coverArt.style.visibility = 'hidden'; }; coverArt.onload = () => { coverArt.style.visibility = 'visible'; }; }
+        function resetPlayerUI() { titleEl.textContent = 'Ничего не играет'; artistEl.textContent = 'Очередь пуста'; coverArt.src = ''; audio.src = ''; progressBar.style.width = '0%'; currentTimeEl.textContent = '0:00'; totalTimeEl.textContent = '0:00'; isPlaying = false; playPauseBtn.textContent = '▶'; }
 
-        function updatePlayerUI(track) {
-            titleEl.textContent = track.title;
-            artistEl.textContent = track.artist;
-            coverArt.src = track.coverUrl || '';
-            coverArt.onerror = () => { coverArt.style.visibility = 'hidden'; };
-            coverArt.onload = () => { coverArt.style.visibility = 'visible'; };
-        }
-
-        function resetPlayerUI() {
-            titleEl.textContent = 'Ничего не играет'; artistEl.textContent = 'Очередь пуста';
-            coverArt.src = ''; audio.src = ''; progressBar.style.width = '0%';
-            currentTimeEl.textContent = '0:00'; totalTimeEl.textContent = '0:00';
-            isPlaying = false; playPauseBtn.textContent = '▶';
-        }
-
-        // --- API CALLS ---
         async function sendApiRequest(endpoint, body) {
-            try {
-                await fetch(`/api/${endpoint}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...body, venueId: currentVenueId })
-                });
+            try { await fetch(`/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, venueId: currentVenueId }) });
             } catch (error) { console.error(`API request to ${endpoint} failed:`, error); }
         }
         
@@ -317,38 +228,24 @@
                 const response = await fetch(`/api/history/${currentVenueId}`);
                 const history = await response.json();
                 historyTab.innerHTML = '';
-                if (history.length > 0) {
-                     history.forEach(track => historyTab.appendChild(renderTrackItem(track, 'history')));
-                } else {
-                    historyTab.innerHTML = '<p style="padding: 10px;">История пуста</p>';
-                }
+                if (history.length > 0) history.forEach(track => historyTab.appendChild(renderTrackItem(track, 'history')));
+                else historyTab.innerHTML = '<p style="padding: 10px;">История пуста</p>';
             } catch (error) { console.error("Failed to fetch history:", error); }
         }
         
-        // --- GLOBAL HANDLERS FOR INLINE ONCLICK ---
         window.eatune = {
-            onAddToQueue: (trackId) => sendApiRequest('queue/add', { trackId, deviceId: 'admin' }),
+            onAddToQueue: (trackId) => sendApiRequest('queue/add', { id: trackId, deviceId: 'admin' }),
             onPlayNext: (trackId) => sendApiRequest('queue/add-next', { trackId }),
             onRemoveFromQueue: (trackId) => sendApiRequest('queue/remove', { trackId }),
         };
 
-        // --- EVENT LISTENERS ---
         playPauseBtn.addEventListener('click', () => audio.paused ? playAudio() : pauseAudio());
         nextBtn.addEventListener('click', () => { sendApiRequest('player/next', {}); fetchHistory(); });
         prevBtn.addEventListener('click', () => sendApiRequest('player/previous', {}));
         audio.addEventListener('ended', () => nextBtn.click());
-        audio.addEventListener('timeupdate', () => {
-             if (audio.duration && !isNaN(audio.duration)) {
-                progressBar.style.width = `${(audio.currentTime / audio.duration) * 100}%`;
-                currentTimeEl.textContent = formatTime(audio.currentTime);
-            }
-        });
+        audio.addEventListener('timeupdate', () => { if (audio.duration && !isNaN(audio.duration)) { progressBar.style.width = `${(audio.currentTime / audio.duration) * 100}%`; currentTimeEl.textContent = formatTime(audio.currentTime); }});
         audio.addEventListener('loadedmetadata', () => totalTimeEl.textContent = formatTime(audio.duration));
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            const filtered = fullLibrary.filter(t => t.title.toLowerCase().includes(query) || t.artist.toLowerCase().includes(query));
-            renderLibraryList(filtered);
-        });
+        searchInput.addEventListener('input', (e) => { const q = e.target.value.toLowerCase(); renderLibraryList(fullLibrary.filter(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q))); });
         tabButtons.forEach(button => {
             button.addEventListener('click', () => {
                 tabButtons.forEach(btn => btn.classList.remove('active'));
@@ -360,19 +257,8 @@
             });
         });
 
-        function generateQRCode(venueId) {
-            qrCodeContainer.innerHTML = '';
-            new QRCode(qrCodeContainer, {
-                text: `eatune://venue/${venueId}`, width: 180, height: 180,
-                colorDark: "#ffffff", colorLight: "transparent",
-            });
-        }
-        function formatTime(seconds) {
-            if (isNaN(seconds) || seconds < 0) seconds = 0;
-            const minutes = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
-            return `${minutes}:${secs}`;
-        }
+        function generateQRCode(venueId) { qrCodeContainer.innerHTML = ''; new QRCode(qrCodeContainer, { text: `eatune://venue/${venueId}`, width: 180, height: 180, colorDark: "#ffffff", colorLight: "transparent", }); }
+        function formatTime(seconds) { if (isNaN(seconds) || seconds < 0) seconds = 0; const minutes = Math.floor(seconds / 60); const secs = Math.floor(seconds % 60).toString().padStart(2, '0'); return `${minutes}:${secs}`; }
     });
     </script>
 </body>
