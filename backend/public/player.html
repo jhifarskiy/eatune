@@ -23,17 +23,23 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .hidden {
+            display: none !important;
         }
         .container {
             width: 100%;
             max-width: 800px;
-            display: none; /* Скрыто по умолчанию */
         }
         .login-container {
             text-align: center;
             padding: 40px;
             background-color: var(--surface);
             border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         .login-container h1 {
             margin-bottom: 20px;
@@ -76,9 +82,24 @@
             border-radius: 12px;
             object-fit: cover;
             margin-right: 20px;
+            background-color: #010A15;
         }
         #now-playing-card .info {
             flex-grow: 1;
+            min-width: 0;
+        }
+        #now-playing-card .info h2 {
+            margin: 0 0 5px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #now-playing-card .info p {
+            margin: 0;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .progress-container {
             height: 5px;
@@ -152,13 +173,27 @@
             height: 40px;
             border-radius: 6px;
             margin-right: 15px;
+            background-color: #010A15;
+            object-fit: cover;
         }
         .queue-item .info {
             flex-grow: 1;
+            min-width: 0;
         }
+        .queue-item .info strong, .queue-item .info p {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+         .queue-item .info p {
+             font-size: 14px;
+             color: var(--text-secondary);
+         }
         .queue-item .requested-by {
             font-size: 12px;
             color: var(--primary);
+            font-weight: bold;
         }
     </style>
 </head>
@@ -171,10 +206,10 @@
         <button id="connect-button">Подключиться</button>
     </div>
 
-    <div id="player-container" class="container">
+    <div id="player-container" class="container hidden">
         <div id="now-playing-card" class="player-section">
             <div style="display: flex; align-items: center;">
-                <img id="cover-art" class="cover" src="placeholder.png" alt="Album Art">
+                <img id="cover-art" class="cover" src="" alt="Album Art">
                 <div class="info">
                     <h2 id="title">Ничего не играет</h2>
                     <p id="artist">Очередь пуста</p>
@@ -227,7 +262,6 @@
             let currentTrack = null;
             let currentVenueId = '';
             
-            // --- ЛОГИКА ПОДКЛЮЧЕНИЯ ---
             connectButton.addEventListener('click', () => {
                 const venueId = venueIdInput.value.trim();
                 if (venueId) {
@@ -239,79 +273,64 @@
             });
 
             function connectWebSocket(venueId) {
-                // Закрываем старое соединение, если оно есть
-                if (ws) {
-                    ws.close();
-                }
-
+                if (ws) ws.close();
                 const wsUrl = `wss://eatune-api.onrender.com?venueId=${venueId}`;
                 ws = new WebSocket(wsUrl);
 
                 ws.onopen = () => {
                     console.log(`WebSocket connected to venue: ${venueId}`);
-                    loginContainer.style.display = 'none';
-                    playerContainer.style.display = 'block';
+                    loginContainer.classList.add('hidden');
+                    playerContainer.classList.remove('hidden');
                 };
 
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data);
-                    handleMessage(data);
+                    if (data.type === 'queue_update') {
+                        const queue = data.queue || [];
+                        updateQueueList(queue);
+                        const newTrack = queue.length > 0 ? queue[0] : null;
+
+                        if (newTrack && (!currentTrack || currentTrack.id !== newTrack.id)) {
+                            loadTrack(newTrack);
+                        } else if (!newTrack) {
+                            resetPlayerUI();
+                        }
+                    }
                 };
 
                 ws.onclose = () => {
                     console.log('WebSocket disconnected.');
-                    loginContainer.style.display = 'flex';
-                    playerContainer.style.display = 'none';
+                    loginContainer.classList.remove('hidden');
+                    playerContainer.classList.add('hidden');
                     currentTrack = null;
                     resetPlayerUI();
                 };
 
                 ws.onerror = (error) => {
                     console.error('WebSocket Error:', error);
-                    alert('Не удалось подключиться к серверу. Проверьте ID заведения и ваше интернет-соединение.');
+                    alert('Не удалось подключиться. Проверьте ID и интернет-соединение.');
                 };
             }
-
-            function handleMessage(data) {
-                if (data.type === 'queue_update') {
-                    const queue = data.queue || [];
-                    updateQueue(queue);
-                    const newTrack = queue.length > 0 ? queue[0] : null;
-                    
-                    if (newTrack && (!currentTrack || currentTrack.id !== newTrack.id)) {
-                        playTrack(newTrack);
-                    } else if (!newTrack) {
-                        resetPlayerUI();
-                    }
-                }
-            }
-
-            function playTrack(track) {
+            
+            function loadTrack(track) {
                 currentTrack = track;
                 updatePlayerUI(track);
                 audio.src = track.trackUrl;
-                audio.play().then(() => {
-                    playPauseBtn.textContent = '⏸';
-                }).catch(e => {
-                    console.error("Ошибка авто-воспроизведения, требуется взаимодействие с пользователем.", e);
-                    playPauseBtn.textContent = '▶';
-                });
+                playPauseBtn.textContent = '▶';
             }
 
-            function updateQueue(queue) {
-                queueList.innerHTML = ''; // Очищаем список
+            function updateQueueList(queue) {
+                queueList.innerHTML = '';
                 const upNext = queue.slice(1);
-
                 if (upNext.length === 0) {
                      queueList.innerHTML = '<li>В очереди больше ничего нет.</li>';
                      return;
                 }
-
                 upNext.forEach(track => {
                     const item = document.createElement('li');
                     item.className = 'queue-item';
                     item.innerHTML = `
-                        <img class="cover" src="${track.coverUrl || 'placeholder.png'}" alt="cover">
+                        <img class="cover" src="${track.coverUrl || ''}" alt="cover" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='; this.style.backgroundColor='var(--background)';">
                         <div class="info">
                             <strong>${track.title}</strong>
                             <p>${track.artist}</p>
@@ -325,13 +344,17 @@
             function updatePlayerUI(track) {
                 titleEl.textContent = track.title;
                 artistEl.textContent = track.artist;
-                coverArt.src = track.coverUrl || 'placeholder.png';
+                coverArt.src = track.coverUrl || '';
+                coverArt.onerror = () => { 
+                    coverArt.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='; 
+                    coverArt.style.backgroundColor = 'var(--background)';
+                };
             }
 
             function resetPlayerUI() {
                 titleEl.textContent = 'Ничего не играет';
                 artistEl.textContent = 'Очередь пуста';
-                coverArt.src = 'placeholder.png';
+                coverArt.src = '';
                 audio.src = '';
                 progressBar.style.width = '0%';
                 currentTimeEl.textContent = '0:00';
@@ -340,40 +363,32 @@
                 playPauseBtn.textContent = '▶';
             }
 
-            // --- ОБРАБОТЧИКИ УПРАВЛЕНИЯ ---
             playPauseBtn.addEventListener('click', () => {
+                if (!currentTrack) return;
                 if (audio.paused) {
-                    audio.play().then(() => playPauseBtn.textContent = '⏸');
+                    audio.play().then(() => playPauseBtn.textContent = '⏸').catch(e => console.error("Play error", e));
                 } else {
                     audio.pause();
                     playPauseBtn.textContent = '▶';
                 }
             });
 
-            nextBtn.addEventListener('click', () => {
-                fetch(`https://eatune-api.onrender.com/track/next`, {
+            function sendPlayerCommand(command) {
+                fetch(`https://eatune-api.onrender.com/track/${command}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ venueId: currentVenueId })
-                });
-            });
-
-            prevBtn.addEventListener('click', () => {
-                fetch(`https://eatune-api.onrender.com/track/previous`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ venueId: currentVenueId })
-                });
-            });
-
-            // --- ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ПЛЕЕРА ---
+                }).catch(e => console.error(`Error sending ${command} command`, e));
+            }
+            
+            nextBtn.addEventListener('click', () => sendPlayerCommand('next'));
+            prevBtn.addEventListener('click', () => sendPlayerCommand('previous'));
+            
             audio.addEventListener('timeupdate', () => {
-                 if (audio.duration) {
+                 if (audio.duration && !isNaN(audio.duration)) {
                     const progress = (audio.currentTime / audio.duration) * 100;
                     progressBar.style.width = `${progress}%`;
                     currentTimeEl.textContent = formatTime(audio.currentTime);
-                    
-                    // Отправляем прогресс на сервер
                     if (ws && ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({
                             type: 'progress_update',
@@ -389,10 +404,11 @@
             });
             
             audio.addEventListener('ended', () => {
-                 nextBtn.click(); // Автоматически переключаем на следующий трек
+                 nextBtn.click();
             });
 
             function formatTime(seconds) {
+                if (isNaN(seconds) || seconds < 0) seconds = 0;
                 const minutes = Math.floor(seconds / 60);
                 const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
                 return `${minutes}:${secs}`;
