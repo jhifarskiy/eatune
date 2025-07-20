@@ -85,11 +85,12 @@
         .action-button svg { width: 16px; height: 16px; }
         .requested-by { font-size: 10px; color: var(--primary); font-weight: bold; text-transform: uppercase; margin-left: 10px; }
         
-        .explorer-list-item { padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .explorer-list-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 600; }
         .explorer-list-item:hover { background-color: var(--surface-light); }
-        .folder { margin-left: 15px; font-size: 14px; color: var(--text-secondary); }
-        
+        .explorer-list-item svg { width: 20px; height: 20px; color: var(--primary); flex-shrink: 0; }
+
         #search-library { width: 100%; padding: 12px 20px; border-radius: 20px; border: none; background-color: var(--background); color: var(--text-primary); font-size: 16px; }
+        .folder-header { display: flex; align-items: center; margin-bottom: 10px; }
 
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7);
@@ -181,14 +182,17 @@
     </div>
 
     <script>
-    // SVG Иконки
+    // --- ICONS ---
     const ICONS = {
         play: '<path d="M8 5v14l11-7z"></path>',
         pause: '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>',
-        add: '<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path>',
-        playNext: '<path d="M13 13h4.5l-4.5-4.5v4.5zM4 18l8.5-6L4 6v12zm9-12v1.5l4.5 4.5-4.5 4.5V18l8.5-6L13 6z"></path>',
-        remove: '<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path>',
-        reAdd: '<path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"></path>'
+        add: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>',
+        playNext: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 13h4.5l-4.5-4.5v4.5zM4 18l8.5-6L4 6v12zm9-12v1.5l4.5 4.5-4.5 4.5V18l8.5-6L13 6z"></path></svg>',
+        remove: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>',
+        reAdd: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"></path></svg>',
+        folder: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"></path></svg>',
+        track: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"></path></svg>',
+        back: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path></svg>'
     };
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -207,8 +211,9 @@
         modalConfirm = $('#modal-confirm'), modalCancel = $('#modal-cancel');
 
         // --- State ---
-        let ws, currentTrack = null, currentVenueId = '', fullLibrary = [], isPlaying = false,
-        genresMap = {}, yearsMap = {}, folderTree = {};
+        let ws, currentTrack = null, currentVenueId = '', fullLibrary = [], currentQueue = [],
+        isPlaying = false, genresMap = {}, yearsMap = {}, folderTree = {},
+        currentFolderPath = [];
 
         // --- Event Listeners ---
         connectButton.addEventListener('click', onConnect);
@@ -240,7 +245,6 @@
             if (!e.target.matches('.tab-button')) return;
             const button = e.target;
             const tabContainer = button.closest('.tabs');
-            const contentContainerId = tabContainer.id === 'left-tabs' ? 'left-panel' : 'right-panel';
             
             tabContainer.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             button.classList.add('active');
@@ -250,10 +254,10 @@
                 $(`#${button.dataset.tab}-tab`).classList.remove('hidden');
                 if (button.dataset.tab === 'history') fetchHistory();
             } else {
+                currentFolderPath = []; // Сбрасываем путь при смене основной вкладки
                 renderFilteredLibrary(button.dataset.tab);
             }
             
-            // Underline animation
             const underline = tabContainer.querySelector('.tab-underline');
             underline.style.left = `${button.offsetLeft}px`;
             underline.style.width = `${button.offsetWidth}px`;
@@ -279,7 +283,6 @@
             };
         }
 
-        // ... (WebSocket, API, Player logic from previous steps) ...
         function connectWebSocket(venueId) {
             if (ws) ws.close();
             const wsUrl = `wss://eatune-api.onrender.com?venueId=${venueId}`;
@@ -311,34 +314,33 @@
         }
 
         function processLibraryData() {
-            genresMap = {}; yearsMap = {}; folderTree = {};
+            genresMap = {}; yearsMap = {}; folderTree = { _files: [], _subfolders: {} };
             fullLibrary.forEach(track => {
                 // Genres
-                (track.genre || 'Unknown').split(',').forEach(g => {
-                    const genre = g.trim();
-                    if (!genresMap[genre]) genresMap[genre] = [];
-                    genresMap[genre].push(track);
-                });
+                (track.genre || 'Unknown').split(',').forEach(g => { const genre = g.trim(); if (!genresMap[genre]) genresMap[genre] = []; genresMap[genre].push(track); });
                 // Years
-                const year = track.year || 'Unknown';
-                if (!yearsMap[year]) yearsMap[year] = [];
-                yearsMap[year].push(track);
+                const year = track.year || 'Unknown'; if (!yearsMap[year]) yearsMap[year] = []; yearsMap[year].push(track);
                 // Folders
                 if (track.filePath) {
                     const parts = track.filePath.split('/');
-                    parts.pop(); // remove filename
+                    const fileName = parts.pop();
                     let currentLevel = folderTree;
                     parts.forEach(part => {
-                        if (!currentLevel[part]) currentLevel[part] = { _files: [], _subfolders: {} };
-                        currentLevel = currentLevel[part]._subfolders;
+                        if (!currentLevel._subfolders[part]) currentLevel._subfolders[part] = { _files: [], _subfolders: {} };
+                        currentLevel = currentLevel._subfolders[part];
                     });
+                    currentLevel._files.push(track);
                 }
             });
         }
 
         function handleQueueUpdate(queue) {
+            currentQueue = queue;
             renderQueueList(queue.slice(1), 'queue-tab');
-            renderQueueList(queue.filter(t => !t.isBackgroundTrack), 'ordered-tab');
+            
+            const orderedTracks = queue.filter(t => !t.isBackgroundTrack);
+            const uniqueOrderedTracks = Array.from(new Map(orderedTracks.map(t => [t.id, t])).values());
+            renderQueueList(uniqueOrderedTracks, 'ordered-tab', false);
 
             const newTrack = queue.length > 0 ? queue[0] : null;
             if (newTrack && (!currentTrack || currentTrack.id !== newTrack.id)) {
@@ -349,19 +351,10 @@
             currentTrack = newTrack;
         }
 
-        function loadTrack(track) {
-            updatePlayerUI(track);
-            audio.src = track.trackUrl;
-            if (isPlaying) playAudio(); else { playPauseIcon.innerHTML = ICONS.play; }
-        }
-
-        function playAudio() {
-            if (!currentTrack || !audio.src) return;
-            audio.play().then(() => { isPlaying = true; playPauseIcon.innerHTML = ICONS.pause; }).catch(e => console.error("Play error:", e));
-        }
-
+        function loadTrack(track) { updatePlayerUI(track); audio.src = track.trackUrl; if (isPlaying) playAudio(); else { playPauseIcon.innerHTML = ICONS.play; } }
+        function playAudio() { if (!currentTrack || !audio.src) return; audio.play().then(() => { isPlaying = true; playPauseIcon.innerHTML = ICONS.pause; }).catch(e => console.error("Play error:", e)); }
         function pauseAudio() { audio.pause(); isPlaying = false; playPauseIcon.innerHTML = ICONS.play; }
-
+        
         function renderTrackItem(track, type) {
             const item = document.createElement('div');
             item.className = 'track-item';
@@ -370,77 +363,73 @@
             else if (type === 'queue') actionsHtml = `<button class="action-button" title="Удалить из очереди" onclick="eatune.onRemoveFromQueue('${track.id}')"><svg viewBox="0 0 24 24" fill="currentColor">${ICONS.remove}</svg></button>`;
             else if (type === 'history') actionsHtml = `<button class="action-button" title="Добавить снова" onclick="eatune.onAddToQueue('${track.id}')"><svg viewBox="0 0 24 24" fill="currentColor">${ICONS.reAdd}</svg></button>`;
             
-            item.innerHTML = `<img class="cover" src="${track.coverUrl || ''}" alt="" onerror="this.style.visibility='hidden'"><div class="info"><strong>${track.title}</strong><p>${track.artist}</p></div><div class="actions">${track.isBackgroundTrack === false ? `<span class="requested-by">Заказ</span>` : ''}${actionsHtml}</div>`;
+            const isOrdered = currentQueue.find(t => t.id === track.id && !t.isBackgroundTrack);
+            item.innerHTML = `<img class="cover" src="${track.coverUrl || ''}" alt="" onerror="this.style.visibility='hidden'"><div class="info"><strong>${track.title}</strong><p>${track.artist}</p></div><div class="actions">${isOrdered ? `<span class="requested-by">Заказ</span>` : ''}${actionsHtml}</div>`;
             return item;
         }
 
-        function renderFilteredLibrary(activeTab = 'all') {
+        function renderFilteredLibrary(activeTab) {
+            if (!activeTab) activeTab = $('#right-tabs .active').dataset.tab;
             libraryContent.innerHTML = '';
             const query = searchInput.value.toLowerCase();
-            let itemsToRender = fullLibrary;
-
+            
             if (query) {
-                itemsToRender = fullLibrary.filter(t => t.title.toLowerCase().includes(query) || t.artist.toLowerCase().includes(query));
+                const itemsToRender = fullLibrary.filter(t => t.title.toLowerCase().includes(query) || t.artist.toLowerCase().includes(query));
                 itemsToRender.forEach(track => libraryContent.appendChild(renderTrackItem(track, 'library')));
             } else {
-                 if (activeTab === 'all') {
-                    fullLibrary.forEach(track => libraryContent.appendChild(renderTrackItem(track, 'library')));
-                 } else if (activeTab === 'genres') {
-                    Object.keys(genresMap).sort().forEach(genre => {
-                        const item = document.createElement('div');
-                        item.className = 'explorer-list-item';
-                        item.textContent = `${genre} (${genresMap[genre].length})`;
-                        item.onclick = () => {
-                            libraryContent.innerHTML = '';
-                            genresMap[genre].forEach(track => libraryContent.appendChild(renderTrackItem(track, 'library')));
-                        };
-                        libraryContent.appendChild(item);
-                    });
-                 } else if (activeTab === 'years') {
-                     Object.keys(yearsMap).sort((a,b) => b-a).forEach(year => {
-                        const item = document.createElement('div');
-                        item.className = 'explorer-list-item';
-                        item.textContent = `${year} (${yearsMap[year].length})`;
-                        item.onclick = () => {
-                            libraryContent.innerHTML = '';
-                            yearsMap[year].forEach(track => libraryContent.appendChild(renderTrackItem(track, 'library')));
-                        };
-                        libraryContent.appendChild(item);
-                    });
-                 } else if (activeTab === 'folders') {
-                    // This is a simplified folder view. A full tree is more complex.
-                    const folders = {};
-                    fullLibrary.forEach(track => {
-                        if (track.filePath) {
-                            const dir = track.filePath.substring(0, track.filePath.lastIndexOf('/'));
-                            if (!folders[dir]) folders[dir] = [];
-                            folders[dir].push(track);
-                        }
-                    });
-                     Object.keys(folders).sort().forEach(folder => {
-                        const item = document.createElement('div');
-                        item.className = 'explorer-list-item';
-                        item.textContent = `📁 ${folder}`;
-                        item.onclick = () => {
-                            libraryContent.innerHTML = '';
-                            folders[folder].forEach(track => libraryContent.appendChild(renderTrackItem(track, 'library')));
-                        };
-                        libraryContent.appendChild(item);
-                    });
-                 }
+                 if (activeTab === 'all') fullLibrary.forEach(track => libraryContent.appendChild(renderTrackItem(track, 'library')));
+                 else if (activeTab === 'genres') Object.keys(genresMap).sort().forEach(genre => libraryContent.appendChild(createExplorerItem(genre, 'genre', () => renderTrackList(genresMap[genre]))));
+                 else if (activeTab === 'years') Object.keys(yearsMap).sort((a,b) => b-a).forEach(year => libraryContent.appendChild(createExplorerItem(year, 'year', () => renderTrackList(yearsMap[year]))));
+                 else if (activeTab === 'folders') renderFolderView();
             }
         }
 
-        function renderQueueList(queue, elementId) {
+        function renderTrackList(tracks) {
+            libraryContent.innerHTML = '';
+            const backButton = createExplorerItem('../ Назад', 'back', () => renderFilteredLibrary());
+            libraryContent.appendChild(backButton);
+            tracks.forEach(track => libraryContent.appendChild(renderTrackItem(track, 'library')));
+        }
+        
+        function renderFolderView() {
+            libraryContent.innerHTML = '';
+            let currentLevel = folderTree;
+            if (currentFolderPath.length > 0) {
+                const backButton = createExplorerItem('../ Назад', 'back', () => { currentFolderPath.pop(); renderFolderView(); });
+                libraryContent.appendChild(backButton);
+                currentFolderPath.forEach(part => currentLevel = currentLevel._subfolders[part]);
+            }
+            
+            Object.keys(currentLevel._subfolders).sort().forEach(folderName => {
+                const item = createExplorerItem(folderName, 'folder', () => { currentFolderPath.push(folderName); renderFolderView(); });
+                libraryContent.appendChild(item);
+            });
+            currentLevel._files.sort((a,b) => a.title.localeCompare(b.title)).forEach(file => {
+                libraryContent.appendChild(renderTrackItem(file, 'library'));
+            });
+        }
+        
+        function createExplorerItem(name, type, onClick) {
+            const item = document.createElement('div');
+            item.className = 'explorer-list-item';
+            let icon = '';
+            if (type === 'folder') icon = ICONS.folder;
+            else if (type === 'back') icon = ICONS.back;
+            item.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor">${icon}</svg><span>${name}</span>`;
+            item.onclick = onClick;
+            return item;
+        }
+
+        function renderQueueList(queue, elementId, showActions = true) {
             const element = document.getElementById(elementId);
             element.innerHTML = '';
             if (queue.length > 0) {
-                queue.forEach(track => element.appendChild(renderTrackItem(track, 'queue')));
+                queue.forEach(track => element.appendChild(renderTrackItem(track, showActions ? 'queue' : 'info')));
             } else {
                 element.innerHTML = `<p style="padding: 10px;">${elementId === 'ordered-tab' ? 'Заказанных треков нет' : 'Очередь пуста'}</p>`;
             }
         }
-
+        
         function updatePlayerUI(track) { titleEl.textContent = track.title; artistEl.textContent = track.artist; coverArt.src = track.coverUrl || ''; coverArt.onerror = () => { coverArt.style.visibility = 'hidden'; }; coverArt.onload = () => { coverArt.style.visibility = 'visible'; }; }
         function resetPlayerUI() { titleEl.textContent = 'Ничего не играет'; artistEl.textContent = 'Очередь пуста'; coverArt.src = ''; audio.src = ''; progressBar.style.width = '0%'; currentTimeEl.textContent = '0:00'; totalTimeEl.textContent = '0:00'; isPlaying = false; playPauseIcon.innerHTML = ICONS.play; }
 

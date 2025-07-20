@@ -79,14 +79,9 @@ wss.on('connection', (ws, req) => {
         try {
             const data = JSON.parse(message);
             if (data.type === 'progress_update' && data.venueId === venueId) {
-                // Рассылаем всем, КРОМЕ отправителя
-                venue.listeners.forEach(client => {
-                    if (client !== ws && client.readyState === client.OPEN) {
-                         client.send(JSON.stringify({
-                            type: 'current_track_progress',
-                            currentTime: data.currentTime
-                        }));
-                    }
+                broadcastToVenue(venueId, {
+                    type: 'current_track_progress',
+                    currentTime: data.currentTime
                 });
             }
         } catch (e) {
@@ -189,13 +184,19 @@ apiRouter.post('/queue/add', async (req, res) => {
     const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
     if (!selectedTrack) return res.status(404).json({ error: 'Track not found' });
 
+    // --- ИСПРАВЛЕННАЯ ЛОГИКА ДОБАВЛЕНИЯ С ПРИОРИТЕТОМ ---
     const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: deviceId };
-    const currentlyPlaying = venue.queue.shift();
-    venue.queue = venue.queue.filter(track => !track.isBackgroundTrack);
-    venue.queue.push(newTrack);
-    if (currentlyPlaying) {
-        venue.queue.unshift(currentlyPlaying);
+    
+    // Находим индекс первой фоновой песни после всех заказов
+    let insertIndex = venue.queue.findIndex((track, index) => index > 0 && track.isBackgroundTrack);
+    
+    // Если фоновых песен нет, просто добавляем в конец
+    if (insertIndex === -1) {
+        insertIndex = venue.queue.length;
     }
+
+    // Вставляем новый трек на найденную позицию
+    venue.queue.splice(insertIndex, 0, newTrack);
     
     if (deviceId !== 'admin') {
       if (!userCooldowns[venueId]) userCooldowns[venueId] = {};
@@ -298,7 +299,7 @@ async function startServer() {
             year: track.year || null,
             trackUrl: track.url,
             coverUrl: track.coverUrl || null,
-            filePath: track.filePath || null, // <-- ДОБАВЛЕНО: Загружаем путь к файлу
+            filePath: track.filePath || null,
         }));
         
         console.log(`Loaded ${backgroundPlaylist.length} tracks into memory.`);
