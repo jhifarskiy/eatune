@@ -182,7 +182,6 @@
     </div>
 
     <script>
-    // --- ICONS ---
     const ICONS = {
         play: '<path d="M8 5v14l11-7z"></path>',
         pause: '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>',
@@ -197,9 +196,8 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         const $ = (selector) => document.querySelector(selector);
-        const $$ = (selector) => document.querySelectorAll(selector);
-
-        // --- DOM Elements ---
+        
+        // --- ИСПРАВЛЕНИЕ: Объявляем все переменные для элементов DOM ---
         const loginContainer = $('#login-container'), mainGrid = $('#main-grid'), venueIdInput = $('#venueId'),
         connectButton = $('#connect-button'), audio = $('#audio-player'), coverArt = $('#cover-art'),
         titleEl = $('#title'), artistEl = $('#artist'), progressBar = $('#progress-bar'),
@@ -208,14 +206,16 @@
         playPauseIcon = $('#play-pause-icon'), nextBtn = $('#next-button'), prevBtn = $('#prev-button'),
         libraryContent = $('#library-content'), searchInput = $('#search-library'),
         modal = $('#confirmation-modal'), modalText = $('#modal-text'),
-        modalConfirm = $('#modal-confirm'), modalCancel = $('#modal-cancel');
+        modalConfirm = $('#modal-confirm'), modalCancel = $('#modal-cancel'),
+        leftTabsContainer = $('#left-tabs'), rightTabsContainer = $('#right-tabs'),
+        queueTab = $('#queue-tab'), orderedTab = $('#ordered-tab'),
+        historyTab = $('#history-tab'), qrTab = $('#qr-tab'),
+        qrCodeContainer = $('#qr-code-container');
 
-        // --- State ---
         let ws, currentTrack = null, currentVenueId = '', fullLibrary = [], currentQueue = [],
         isPlaying = false, genresMap = {}, yearsMap = {}, folderTree = {},
         currentFolderPath = [];
 
-        // --- Event Listeners ---
         connectButton.addEventListener('click', onConnect);
         playPauseBtn.addEventListener('click', () => audio.paused ? playAudio() : pauseAudio());
         nextBtn.addEventListener('click', onNext);
@@ -225,10 +225,10 @@
         audio.addEventListener('loadedmetadata', () => totalTimeEl.textContent = formatTime(audio.duration));
         searchInput.addEventListener('input', () => renderFilteredLibrary());
         progressContainer.addEventListener('click', seek);
-        $$('.tabs').forEach(tabContainer => tabContainer.addEventListener('click', handleTabClick));
+        leftTabsContainer.addEventListener('click', handleTabClick);
+        rightTabsContainer.addEventListener('click', handleTabClick);
         modalCancel.addEventListener('click', () => modal.classList.remove('visible'));
 
-        // --- Functions ---
         function onConnect() {
             const venueId = venueIdInput.value.trim();
             if (!venueId) return alert('Пожалуйста, введите ID заведения.');
@@ -250,11 +250,11 @@
             button.classList.add('active');
             
             if (tabContainer.id === 'left-tabs') {
-                $$('#left-tabs + div > div').forEach(el => el.classList.add('hidden'));
+                [queueTab, orderedTab, historyTab, qrTab].forEach(el => el.classList.add('hidden'));
                 $(`#${button.dataset.tab}-tab`).classList.remove('hidden');
                 if (button.dataset.tab === 'history') fetchHistory();
             } else {
-                currentFolderPath = []; // Сбрасываем путь при смене основной вкладки
+                currentFolderPath = [];
                 renderFilteredLibrary(button.dataset.tab);
             }
             
@@ -264,7 +264,7 @@
         }
 
         function setupTabUnderlines() {
-            $$('.tabs').forEach(container => {
+            [leftTabsContainer, rightTabsContainer].forEach(container => {
                 const activeButton = container.querySelector('.tab-button.active');
                 const underline = container.querySelector('.tab-underline');
                 if (activeButton && underline) {
@@ -274,15 +274,16 @@
             });
         }
         
-        function showConfirmationModal(text, onConfirmCallback) {
+        function showModal(text, onConfirmCallback, showCancel = true) {
             modalText.textContent = text;
             modal.classList.add('visible');
-            modalConfirm.onclick = () => {
-                onConfirmCallback();
-                modal.classList.remove('visible');
-            };
+            modalConfirm.classList.toggle('hidden', !onConfirmCallback);
+            modalCancel.classList.toggle('hidden', !showCancel);
+            if (onConfirmCallback) {
+                modalConfirm.onclick = () => { onConfirmCallback(); modal.classList.remove('visible'); };
+            }
         }
-
+        
         function connectWebSocket(venueId) {
             if (ws) ws.close();
             const wsUrl = `wss://eatune-api.onrender.com?venueId=${venueId}`;
@@ -316,14 +317,11 @@
         function processLibraryData() {
             genresMap = {}; yearsMap = {}; folderTree = { _files: [], _subfolders: {} };
             fullLibrary.forEach(track => {
-                // Genres
                 (track.genre || 'Unknown').split(',').forEach(g => { const genre = g.trim(); if (!genresMap[genre]) genresMap[genre] = []; genresMap[genre].push(track); });
-                // Years
                 const year = track.year || 'Unknown'; if (!yearsMap[year]) yearsMap[year] = []; yearsMap[year].push(track);
-                // Folders
                 if (track.filePath) {
                     const parts = track.filePath.split('/');
-                    const fileName = parts.pop();
+                    parts.pop();
                     let currentLevel = folderTree;
                     parts.forEach(part => {
                         if (!currentLevel._subfolders[part]) currentLevel._subfolders[part] = { _files: [], _subfolders: {} };
@@ -336,12 +334,10 @@
 
         function handleQueueUpdate(queue) {
             currentQueue = queue;
-            renderQueueList(queue.slice(1), 'queue-tab');
-            
+            renderQueueList(queue.slice(1), queueTab);
             const orderedTracks = queue.filter(t => !t.isBackgroundTrack);
             const uniqueOrderedTracks = Array.from(new Map(orderedTracks.map(t => [t.id, t])).values());
-            renderQueueList(uniqueOrderedTracks, 'ordered-tab', false);
-
+            renderQueueList(uniqueOrderedTracks, orderedTab, false);
             const newTrack = queue.length > 0 ? queue[0] : null;
             if (newTrack && (!currentTrack || currentTrack.id !== newTrack.id)) {
                 loadTrack(newTrack);
@@ -369,7 +365,7 @@
         }
 
         function renderFilteredLibrary(activeTab) {
-            if (!activeTab) activeTab = $('#right-tabs .active').dataset.tab;
+            if (!activeTab) activeTab = rightTabsContainer.querySelector('.active').dataset.tab;
             libraryContent.innerHTML = '';
             const query = searchInput.value.toLowerCase();
             
@@ -420,13 +416,12 @@
             return item;
         }
 
-        function renderQueueList(queue, elementId, showActions = true) {
-            const element = document.getElementById(elementId);
+        function renderQueueList(queue, element, showActions = true) {
             element.innerHTML = '';
             if (queue.length > 0) {
                 queue.forEach(track => element.appendChild(renderTrackItem(track, showActions ? 'queue' : 'info')));
             } else {
-                element.innerHTML = `<p style="padding: 10px;">${elementId === 'ordered-tab' ? 'Заказанных треков нет' : 'Очередь пуста'}</p>`;
+                element.innerHTML = `<p style="padding: 10px;">${element.id === 'ordered-tab' ? 'Заказанных треков нет' : 'Очередь пуста'}</p>`;
             }
         }
         
@@ -434,8 +429,16 @@
         function resetPlayerUI() { titleEl.textContent = 'Ничего не играет'; artistEl.textContent = 'Очередь пуста'; coverArt.src = ''; audio.src = ''; progressBar.style.width = '0%'; currentTimeEl.textContent = '0:00'; totalTimeEl.textContent = '0:00'; isPlaying = false; playPauseIcon.innerHTML = ICONS.play; }
 
         async function sendApiRequest(endpoint, body) {
-            try { await fetch(`/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, venueId: currentVenueId }) });
-            } catch (error) { console.error(`API request to ${endpoint} failed:`, error); }
+            try { 
+                const response = await fetch(`/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, venueId: currentVenueId }) });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    showModal(errorData.error, null, false);
+                }
+            } catch (error) { 
+                console.error(`API request to ${endpoint} failed:`, error);
+                showModal('Ошибка сети. Не удалось выполнить действие.', null, false);
+            }
         }
         
         async function fetchHistory() {
@@ -449,9 +452,9 @@
         }
         
         window.eatune = {
-            onAddToQueue: (trackId) => showConfirmationModal('Добавить трек в очередь?', () => sendApiRequest('queue/add', { id: trackId, deviceId: 'admin' })),
-            onPlayNext: (trackId) => showConfirmationModal('Поставить трек следующим?', () => sendApiRequest('queue/add-next', { trackId })),
-            onRemoveFromQueue: (trackId) => showConfirmationModal('Удалить трек из очереди?', () => sendApiRequest('queue/remove', { trackId })),
+            onAddToQueue: (trackId) => showModal('Добавить трек в очередь?', () => sendApiRequest('queue/add', { id: trackId, deviceId: 'admin' })),
+            onPlayNext: (trackId) => showModal('Поставить трек следующим?', () => sendApiRequest('queue/add-next', { trackId })),
+            onRemoveFromQueue: (trackId) => showModal('Удалить трек из очереди?', () => sendApiRequest('queue/remove', { trackId })),
         };
         
         function updateProgress() {
