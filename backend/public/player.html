@@ -3,198 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eatune Player Control</title>
+    <title>Eatune Control Panel</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --background: #010A15;
             --primary: #1CA4FF;
             --surface: #0D325F;
+            --surface-light: #1a3a6d;
             --text-primary: #FFFFFF;
             --text-secondary: #a0aec0;
+            --danger: #e53e3e;
         }
+        * { box-sizing: border-box; }
         body {
             font-family: 'Montserrat', sans-serif;
             background-color: var(--background);
             color: var(--text-primary);
             margin: 0;
-            padding: 20px;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            box-sizing: border-box;
+            padding: 20px;
         }
-        .hidden {
-            display: none !important;
-        }
-        .container {
-            width: 100%;
-            max-width: 800px;
-        }
+        .hidden { display: none !important; }
+
+        /* --- Login Screen --- */
         .login-container {
-            text-align: center;
-            padding: 40px;
-            background-color: var(--surface);
-            border-radius: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            text-align: center; padding: 40px; background-color: var(--surface);
+            border-radius: 20px; display: flex; flex-direction: column; align-items: center;
+            max-width: 400px;
         }
-        .login-container h1 {
-            margin-bottom: 20px;
-        }
+        .login-container h1 { margin-bottom: 20px; }
         #venueId {
-            padding: 15px;
-            width: 80%;
-            max-width: 300px;
-            border-radius: 25px;
-            border: 2px solid var(--primary);
-            background-color: var(--background);
-            color: var(--text-primary);
-            font-size: 16px;
-            text-align: center;
-            margin-bottom: 20px;
+            padding: 15px; width: 100%; border-radius: 25px; border: 2px solid var(--primary);
+            background-color: var(--background); color: var(--text-primary);
+            font-size: 16px; text-align: center; margin-bottom: 20px;
         }
         #connect-button {
-            padding: 15px 30px;
-            border-radius: 25px;
-            border: none;
-            background-color: var(--primary);
-            color: var(--background);
-            font-weight: bold;
-            font-size: 16px;
-            cursor: pointer;
-            transition: transform 0.2s;
+            padding: 15px 30px; border-radius: 25px; border: none; background-color: var(--primary);
+            color: var(--text-primary); font-weight: bold; font-size: 16px; cursor: pointer; transition: transform 0.2s;
         }
-        #connect-button:hover {
-            transform: scale(1.05);
+        #connect-button:hover { transform: scale(1.05); }
+
+        /* --- Main Layout --- */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            height: 90vh;
+            max-height: 800px;
         }
-        .player-section {
+        .panel {
             background-color: var(--surface);
-            padding: 20px;
             border-radius: 20px;
-            margin-bottom: 20px;
-        }
-        #now-playing-card .cover {
-            width: 80px;
-            height: 80px;
-            border-radius: 12px;
-            object-fit: cover;
-            margin-right: 20px;
-            background-color: #010A15;
-        }
-        #now-playing-card .info {
-            flex-grow: 1;
-            min-width: 0;
-        }
-        #now-playing-card .info h2 {
-            margin: 0 0 5px 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        #now-playing-card .info p {
-            margin: 0;
-            color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .progress-container {
-            height: 5px;
-            background-color: rgba(255,255,255,0.2);
-            border-radius: 2.5px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-        #progress-bar {
-            width: 0%;
-            height: 100%;
-            background-color: var(--primary);
-            transition: width 0.5s linear;
-        }
-        .time-labels {
+            padding: 20px;
             display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        .controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 15px;
-        }
-        .control-button {
-            background: none;
-            border: 2px solid var(--text-secondary);
-            color: var(--text-secondary);
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            cursor: pointer;
-            margin: 0 15px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 24px;
-            transition: all 0.2s;
-        }
-        .control-button:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-        }
-        #play-pause-button {
-            width: 60px;
-            height: 60px;
-            border-color: var(--primary);
-            color: var(--primary);
-            font-size: 30px;
-        }
-        .queue-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .queue-item {
-            display: flex;
-            align-items: center;
-            padding: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .queue-item:last-child {
-            border-bottom: none;
-        }
-        .queue-item .cover {
-            width: 40px;
-            height: 40px;
-            border-radius: 6px;
-            margin-right: 15px;
-            background-color: #010A15;
-            object-fit: cover;
-        }
-        .queue-item .info {
-            flex-grow: 1;
-            min-width: 0;
-        }
-        .queue-item .info strong, .queue-item .info p {
-            white-space: nowrap;
+            flex-direction: column;
             overflow: hidden;
-            text-overflow: ellipsis;
-            display: block;
         }
-         .queue-item .info p {
-             font-size: 14px;
-             color: var(--text-secondary);
-         }
-        .queue-item .requested-by {
-            font-size: 12px;
-            color: var(--primary);
-            font-weight: bold;
-        }
+        .left-panel { gap: 20px; }
+        .right-panel { gap: 20px; }
+
+        /* --- UI Components --- */
+        .card { background-color: var(--surface-light); border-radius: 16px; padding: 15px; }
+        h3 { margin: 0 0 15px 5px; text-transform: uppercase; font-size: 14px; letter-spacing: 1.5px; color: var(--text-secondary); }
+        .scrollable-list { overflow-y: auto; padding-right: 5px; }
+        .scrollable-list::-webkit-scrollbar { width: 4px; }
+        .scrollable-list::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 2px; }
+
+        /* --- Now Playing Card --- */
+        #now-playing-card .cover { width: 80px; height: 80px; border-radius: 12px; object-fit: cover; margin-right: 20px; background-color: #010A15; }
+        #now-playing-card .info { flex-grow: 1; min-width: 0; }
+        #now-playing-card .info h2, #now-playing-card .info p { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #now-playing-card .info h2 { margin-bottom: 5px; }
+        #now-playing-card .info p { color: var(--text-secondary); }
+        .progress-container { height: 5px; background-color: rgba(255,255,255,0.2); border-radius: 2.5px; overflow: hidden; margin: 10px 0; }
+        #progress-bar { width: 0%; height: 100%; background-color: var(--primary); transition: width 0.5s linear; }
+        .time-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); }
+        .controls { display: flex; justify-content: center; align-items: center; margin-top: 15px; }
+        .control-button { background: none; border: 2px solid var(--text-secondary); color: var(--text-secondary); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; margin: 0 10px; display: flex; justify-content: center; align-items: center; font-size: 20px; transition: all 0.2s; }
+        .control-button:hover { border-color: var(--primary); color: var(--primary); }
+        #play-pause-button { width: 60px; height: 60px; border-color: var(--primary); color: var(--primary); font-size: 30px; }
+
+        /* --- QR Code & History --- */
+        .qr-history-tabs { display: flex; margin-bottom: 10px; border-bottom: 1px solid var(--surface-light); }
+        .tab-button { background: none; border: none; color: var(--text-secondary); padding: 10px 15px; cursor: pointer; font-size: 14px; font-weight: 600; border-bottom: 3px solid transparent; }
+        .tab-button.active { color: var(--text-primary); border-bottom-color: var(--primary); }
+        #qr-code-container { display: flex; justify-content: center; align-items: center; padding: 20px; }
+        
+        /* --- Track Item (for Queue, History, Library) --- */
+        .track-item { display: flex; align-items: center; padding: 10px 5px; cursor: pointer; border-radius: 8px; transition: background-color 0.2s; }
+        .track-item:hover { background-color: var(--surface-light); }
+        .track-item .cover { width: 40px; height: 40px; border-radius: 6px; margin-right: 15px; background-color: #010A15; object-fit: cover; flex-shrink: 0; }
+        .track-item .info { flex-grow: 1; min-width: 0; }
+        .track-item .info strong, .track-item .info p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        .track-item .info p { font-size: 12px; color: var(--text-secondary); }
+        .track-item .actions { display: flex; align-items: center; }
+        .action-button { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px; font-size: 18px; border-radius: 50%; }
+        .action-button:hover { color: var(--text-primary); background-color: rgba(255,255,255,0.1); }
+        .action-button.danger:hover { color: var(--danger); }
+        .requested-by { font-size: 10px; color: var(--primary); font-weight: bold; text-transform: uppercase; }
+
+        /* --- Library Panel --- */
+        #search-library { width: 100%; padding: 12px 20px; border-radius: 20px; border: none; background-color: var(--surface-light); color: var(--text-primary); font-size: 16px; }
     </style>
 </head>
 <body>
@@ -206,33 +122,42 @@
         <button id="connect-button">Подключиться</button>
     </div>
 
-    <div id="player-container" class="container hidden">
-        <div id="now-playing-card" class="player-section">
-            <div style="display: flex; align-items: center;">
-                <img id="cover-art" class="cover" src="" alt="Album Art">
-                <div class="info">
-                    <h2 id="title">Ничего не играет</h2>
-                    <p id="artist">Очередь пуста</p>
+    <div id="main-grid" class="main-grid hidden">
+        <div class="panel left-panel">
+            <div id="now-playing-card" class="card">
+                <div style="display: flex; align-items: center;">
+                    <img id="cover-art" class="cover" src="" alt="Album Art">
+                    <div class="info">
+                        <h2 id="title">Ничего не играет</h2>
+                        <p id="artist">Очередь пуста</p>
+                    </div>
+                </div>
+                <div class="progress-container"><div id="progress-bar"></div></div>
+                <div class="time-labels"><span id="current-time">0:00</span><span id="total-time">0:00</span></div>
+                <div class="controls">
+                    <button id="prev-button" class="control-button">⏮</button>
+                    <button id="play-pause-button" class="control-button">▶</button>
+                    <button id="next-button" class="control-button">⏭</button>
                 </div>
             </div>
-            <div class="progress-container">
-                <div id="progress-bar"></div>
-            </div>
-            <div class="time-labels">
-                <span id="current-time">0:00</span>
-                <span id="total-time">0:00</span>
-            </div>
-             <div class="controls">
-                <button id="prev-button" class="control-button">⏮</button>
-                <button id="play-pause-button" class="control-button">▶</button>
-                <button id="next-button" class="control-button">⏭</button>
+            <div class="card" style="flex-grow: 1; display: flex; flex-direction: column;">
+                <div class="qr-history-tabs">
+                    <button class="tab-button active" data-tab="queue">Очередь</button>
+                    <button class="tab-button" data-tab="history">История</button>
+                    <button class="tab-button" data-tab="qr">QR-Код</button>
+                </div>
+                <div id="queue-tab" class="scrollable-list" style="flex-grow: 1;"></div>
+                <div id="history-tab" class="scrollable-list hidden" style="flex-grow: 1;"></div>
+                <div id="qr-tab" class="hidden" style="flex-grow: 1; display: flex; align-items: center; justify-content: center;">
+                    <div id="qr-code-container"></div>
+                </div>
             </div>
         </div>
 
-        <div class="player-section">
-            <h3>Следующие в очереди</h3>
-            <ul id="queue-list" class="queue-list">
-                </ul>
+        <div class="panel right-panel">
+            <h3>Медиатека</h3>
+            <input type="text" id="search-library" placeholder="Поиск по названию или исполнителю...">
+            <div id="library-list" class="scrollable-list" style="flex-grow: 1;"></div>
         </div>
     </div>
 
@@ -240,11 +165,11 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements
             const loginContainer = document.getElementById('login-container');
-            const playerContainer = document.getElementById('player-container');
+            const mainGrid = document.getElementById('main-grid');
             const venueIdInput = document.getElementById('venueId');
             const connectButton = document.getElementById('connect-button');
-            
             const audio = document.getElementById('audio-player');
             const coverArt = document.getElementById('cover-art');
             const titleEl = document.getElementById('title');
@@ -252,21 +177,31 @@
             const progressBar = document.getElementById('progress-bar');
             const currentTimeEl = document.getElementById('current-time');
             const totalTimeEl = document.getElementById('total-time');
-            const queueList = document.getElementById('queue-list');
-
             const playPauseBtn = document.getElementById('play-pause-button');
             const nextBtn = document.getElementById('next-button');
             const prevBtn = document.getElementById('prev-button');
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const queueTab = document.getElementById('queue-tab');
+            const historyTab = document.getElementById('history-tab');
+            const qrTab = document.getElementById('qr-tab');
+            const qrCodeContainer = document.getElementById('qr-code-container');
+            const searchInput = document.getElementById('search-library');
+            const libraryList = document.getElementById('library-list');
 
+            // State
             let ws;
             let currentTrack = null;
             let currentVenueId = '';
-            
+            let fullLibrary = [];
+
+            // --- INIT & CONNECTION ---
             connectButton.addEventListener('click', () => {
                 const venueId = venueIdInput.value.trim();
                 if (venueId) {
                     currentVenueId = venueId;
                     connectWebSocket(venueId);
+                    loadFullLibrary();
+                    generateQRCode(venueId);
                 } else {
                     alert('Пожалуйста, введите ID заведения.');
                 }
@@ -280,75 +215,125 @@
                 ws.onopen = () => {
                     console.log(`WebSocket connected to venue: ${venueId}`);
                     loginContainer.classList.add('hidden');
-                    playerContainer.classList.remove('hidden');
+                    mainGrid.classList.remove('hidden');
+                    fetchHistory(); // Загружаем историю при подключении
                 };
-
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data);
                     if (data.type === 'queue_update') {
-                        const queue = data.queue || [];
-                        updateQueueList(queue);
-                        const newTrack = queue.length > 0 ? queue[0] : null;
-
-                        if (newTrack && (!currentTrack || currentTrack.id !== newTrack.id)) {
-                            loadTrack(newTrack);
-                        } else if (!newTrack) {
-                            resetPlayerUI();
-                        }
+                        handleQueueUpdate(data.queue || []);
+                    } else if (data.type === 'player_control') {
+                        if (data.action === 'play') audio.play().then(() => playPauseBtn.textContent = '⏸');
+                        if (data.action === 'pause') audio.pause();
                     }
                 };
-
                 ws.onclose = () => {
                     console.log('WebSocket disconnected.');
                     loginContainer.classList.remove('hidden');
-                    playerContainer.classList.add('hidden');
-                    currentTrack = null;
-                    resetPlayerUI();
+                    mainGrid.classList.add('hidden');
+                    currentTrack = null; resetPlayerUI();
                 };
-
-                ws.onerror = (error) => {
-                    console.error('WebSocket Error:', error);
-                    alert('Не удалось подключиться. Проверьте ID и интернет-соединение.');
-                };
+                ws.onerror = (error) => console.error('WebSocket Error:', error);
             }
-            
+
+            async function loadFullLibrary() {
+                try {
+                    const response = await fetch('/api/tracks');
+                    fullLibrary = await response.json();
+                    renderLibraryList(fullLibrary);
+                } catch (error) {
+                    console.error("Failed to load library:", error);
+                }
+            }
+
+            // --- UI RENDERING ---
+
+            function renderTrackItem(track, type) {
+                const item = document.createElement('div');
+                item.className = 'track-item';
+                item.innerHTML = `
+                    <img class="cover" src="${track.coverUrl || ''}" alt="" onerror="this.style.visibility='hidden'">
+                    <div class="info">
+                        <strong>${track.title}</strong>
+                        <p>${track.artist}</p>
+                    </div>
+                    <div class="actions">
+                        ${track.isBackgroundTrack === false ? `<span class="requested-by">Заказ</span>` : ''}
+                    </div>
+                `;
+
+                const actionsContainer = item.querySelector('.actions');
+
+                if (type === 'library') {
+                    const btnAdd = document.createElement('button');
+                    btnAdd.className = 'action-button';
+                    btnAdd.title = 'Добавить в конец очереди';
+                    btnAdd.innerHTML = '➕';
+                    btnAdd.onclick = (e) => { e.stopPropagation(); sendApiRequest('queue/add', { trackId: track.id }); };
+                    
+                    const btnPlayNext = document.createElement('button');
+                    btnPlayNext.className = 'action-button';
+                    btnPlayNext.title = 'Играть следующим';
+                    btnPlayNext.innerHTML = '⏯️';
+                    btnPlayNext.onclick = (e) => { e.stopPropagation(); sendApiRequest('queue/add-next', { trackId: track.id }); };
+
+                    actionsContainer.append(btnPlayNext, btnAdd);
+                } else if (type === 'queue') {
+                    const btnRemove = document.createElement('button');
+                    btnRemove.className = 'action-button danger';
+                    btnRemove.title = 'Удалить из очереди';
+                    btnRemove.innerHTML = '✖️';
+                    btnRemove.onclick = (e) => { e.stopPropagation(); sendApiRequest('queue/remove', { trackId: track.id }); };
+                    actionsContainer.appendChild(btnRemove);
+                } else if (type === 'history') {
+                    const btnReAdd = document.createElement('button');
+                    btnReAdd.className = 'action-button';
+                    btnReAdd.title = 'Добавить снова';
+                    btnReAdd.innerHTML = '🔁';
+                    btnReAdd.onclick = (e) => { e.stopPropagation(); sendApiRequest('queue/add', { trackId: track.id, deviceId: 'admin' }); };
+                    actionsContainer.appendChild(btnReAdd);
+                }
+
+                return item;
+            }
+
+            function renderLibraryList(tracks) {
+                libraryList.innerHTML = '';
+                tracks.forEach(track => libraryList.appendChild(renderTrackItem(track, 'library')));
+            }
+
+            function handleQueueUpdate(queue) {
+                // Update "Up Next" list
+                queueTab.innerHTML = '';
+                const upNext = queue.slice(1);
+                if (upNext.length > 0) {
+                    upNext.forEach(track => queueTab.appendChild(renderTrackItem(track, 'queue')));
+                } else {
+                    queueTab.innerHTML = '<p style="padding: 10px;">Очередь пуста</p>';
+                }
+
+                // Update "Now Playing"
+                const newTrack = queue.length > 0 ? queue[0] : null;
+                if (newTrack && (!currentTrack || currentTrack.id !== newTrack.id)) {
+                    loadTrack(newTrack);
+                } else if (!newTrack) {
+                    resetPlayerUI();
+                }
+                currentTrack = newTrack;
+            }
+
             function loadTrack(track) {
-                currentTrack = track;
                 updatePlayerUI(track);
                 audio.src = track.trackUrl;
-                playPauseBtn.textContent = '▶';
+                playPauseBtn.textContent = '▶'; // Готов к воспроизведению по клику
             }
 
-            function updateQueueList(queue) {
-                queueList.innerHTML = '';
-                const upNext = queue.slice(1);
-                if (upNext.length === 0) {
-                     queueList.innerHTML = '<li>В очереди больше ничего нет.</li>';
-                     return;
-                }
-                upNext.forEach(track => {
-                    const item = document.createElement('li');
-                    item.className = 'queue-item';
-                    item.innerHTML = `
-                        <img class="cover" src="${track.coverUrl || ''}" alt="cover" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='; this.style.backgroundColor='var(--background)';">
-                        <div class="info">
-                            <strong>${track.title}</strong>
-                            <p>${track.artist}</p>
-                        </div>
-                        ${track.isBackgroundTrack ? '' : '<span class="requested-by">Заказ</span>'}
-                    `;
-                    queueList.appendChild(item);
-                });
-            }
-            
             function updatePlayerUI(track) {
                 titleEl.textContent = track.title;
                 artistEl.textContent = track.artist;
                 coverArt.src = track.coverUrl || '';
-                coverArt.onerror = () => { 
-                    coverArt.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='; 
-                    coverArt.style.backgroundColor = 'var(--background)';
-                };
+                coverArt.onerror = () => { coverArt.style.visibility = 'hidden'; };
+                coverArt.onload = () => { coverArt.style.visibility = 'visible'; };
             }
 
             function resetPlayerUI() {
@@ -359,54 +344,104 @@
                 progressBar.style.width = '0%';
                 currentTimeEl.textContent = '0:00';
                 totalTimeEl.textContent = '0:00';
-                queueList.innerHTML = '<li>Очередь пуста</li>';
                 playPauseBtn.textContent = '▶';
             }
 
+            // --- ACTIONS & API ---
+
+            async function sendApiRequest(endpoint, body) {
+                try {
+                    await fetch(`/api/${endpoint}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...body, venueId: currentVenueId })
+                    });
+                } catch (error) {
+                    console.error(`API request to ${endpoint} failed:`, error);
+                }
+            }
+             
+            async function fetchHistory() {
+                 try {
+                    const response = await fetch(`/api/history/${currentVenueId}`);
+                    const history = await response.json();
+                    historyTab.innerHTML = '';
+                    if (history.length > 0) {
+                         history.forEach(track => historyTab.appendChild(renderTrackItem(track, 'history')));
+                    } else {
+                        historyTab.innerHTML = '<p style="padding: 10px;">История пуста</p>';
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch history:", error);
+                }
+            }
+
+
+            // --- EVENT LISTENERS ---
             playPauseBtn.addEventListener('click', () => {
                 if (!currentTrack) return;
                 if (audio.paused) {
-                    audio.play().then(() => playPauseBtn.textContent = '⏸').catch(e => console.error("Play error", e));
+                    audio.play().then(() => playPauseBtn.textContent = '⏸');
                 } else {
                     audio.pause();
                     playPauseBtn.textContent = '▶';
                 }
             });
 
-            function sendPlayerCommand(command) {
-                fetch(`https://eatune-api.onrender.com/track/${command}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ venueId: currentVenueId })
-                }).catch(e => console.error(`Error sending ${command} command`, e));
-            }
-            
-            nextBtn.addEventListener('click', () => sendPlayerCommand('next'));
-            prevBtn.addEventListener('click', () => sendPlayerCommand('previous'));
+            nextBtn.addEventListener('click', () => {
+                sendApiRequest('player/next', {});
+                fetchHistory(); // Обновляем историю после пропуска трека
+            });
+            prevBtn.addEventListener('click', () => sendApiRequest('player/previous', {}));
             
             audio.addEventListener('timeupdate', () => {
                  if (audio.duration && !isNaN(audio.duration)) {
-                    const progress = (audio.currentTime / audio.duration) * 100;
-                    progressBar.style.width = `${progress}%`;
+                    progressBar.style.width = `${(audio.currentTime / audio.duration) * 100}%`;
                     currentTimeEl.textContent = formatTime(audio.currentTime);
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({
-                            type: 'progress_update',
-                            venueId: currentVenueId,
-                            currentTime: audio.currentTime
-                        }));
-                    }
                 }
             });
-
             audio.addEventListener('loadedmetadata', () => {
                 totalTimeEl.textContent = formatTime(audio.duration);
             });
-            
             audio.addEventListener('ended', () => {
-                 nextBtn.click();
+                nextBtn.click();
             });
 
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                const filtered = fullLibrary.filter(t => 
+                    t.title.toLowerCase().includes(query) || 
+                    t.artist.toLowerCase().includes(query)
+                );
+                renderLibraryList(filtered);
+            });
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    queueTab.classList.add('hidden');
+                    historyTab.classList.add('hidden');
+                    qrTab.classList.add('hidden');
+                    
+                    const tabName = button.dataset.tab;
+                    document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+
+                    if (tabName === 'history') fetchHistory();
+                });
+            });
+
+            function generateQRCode(venueId) {
+                qrCodeContainer.innerHTML = '';
+                new QRCode(qrCodeContainer, {
+                    text: `eatune://venue/${venueId}`,
+                    width: 180,
+                    height: 180,
+                    colorDark: "#ffffff",
+                    colorLight: "transparent",
+                });
+            }
+            
             function formatTime(seconds) {
                 if (isNaN(seconds) || seconds < 0) seconds = 0;
                 const minutes = Math.floor(seconds / 60);
