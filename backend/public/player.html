@@ -461,7 +461,7 @@
 
         // --- ИЗМЕНЕНИЕ: Отправляем обновление не чаще раза в секунду ---
         const now = Date.now();
-        if (now - lastProgressUpdate > 1000) {
+        if (now - lastProgressUpdate > 2500) {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: 'progress_update', venueId: currentVenueId,
