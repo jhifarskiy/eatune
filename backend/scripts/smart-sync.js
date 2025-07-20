@@ -6,7 +6,7 @@ const { MongoClient } = require('mongodb');
 const path = require('path');
 
 const R2_CONFIG = {
-    endpoint: 'https://e51a1f68ce64b0c69f6588f1e885c3ff.r2.cloudflarestorage.com',
+    endpoint: `https://e51a1f68ce64b0c69f6588f1e885c3ff.r2.cloudflarestorage.com`,
     region: 'auto',
     credentials: {
         accessKeyId: process.env.R2_ACCESS_KEY_ID,
@@ -19,14 +19,18 @@ const DB_NAME = 'eatune';
 const COLLECTION_NAME = 'tracks';
 const METADATA_CHUNK_SIZE_KB = 256;
 
-if (!R2_CONFIG.credentials.accessKeyId || !R2_CONFIG.credentials.secretAccessKey || !process.env.MONGO_PASSWORD) {
-    console.error('❌ Ошибка: Ключи доступа R2 или пароль от MongoDB не предоставлены. Проверьте ваш .env файл.');
+// --- ИЗМЕНЕНИЕ: Проверяем новую переменную R2_PUBLIC_URL ---
+if (!R2_CONFIG.credentials.accessKeyId || !R2_CONFIG.credentials.secretAccessKey || !process.env.MONGO_PASSWORD || !process.env.R2_PUBLIC_URL) {
+    console.error('❌ Ошибка: Не все переменные заданы. Проверьте R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, MONGO_PASSWORD и R2_PUBLIC_URL в вашем .env файле.');
     process.exit(1);
 }
 
 const s3Client = new S3Client(R2_CONFIG);
 const MONGO_URL = MONGO_URI_TEMPLATE.replace('<ПАРОЛЬ>', process.env.MONGO_PASSWORD);
 const mongoClient = new MongoClient(MONGO_URL, { tls: true });
+// --- ИЗМЕНЕНИЕ: Формируем базовый публичный URL ---
+const PUBLIC_R2_URL_BASE = `https://${process.env.R2_PUBLIC_URL}`;
+
 
 function cleanName(rawName) {
     if (!rawName) return '';
@@ -56,86 +60,35 @@ async function smartSync() {
         const db = mongoClient.db(DB_NAME);
         const collection = db.collection(COLLECTION_NAME);
 
-        // --- НОВАЯ ЛОГИКА СИНХРОНИЗАЦИИ ---
+        console.log('🔄 Запускаю полную пересинхронизацию URL в базе данных...');
+        
+        const allTracks = await collection.find({}).toArray();
+        const bulkOps = [];
 
-        // 1. Получаем все файлы из R2
-        const listCommand = new ListObjectsV2Command({ Bucket: BUCKET_NAME });
-        const { Contents } = await s3Client.send(listCommand);
-        const r2Files = Contents ? Contents.filter(file => /\.(mp3|wav|flac|m4a)$/i.test(file.Key) && file.Size > 0) : [];
-        const endpointUrl = R2_CONFIG.endpoint.replace('https://', '');
-        const r2FileUrls = new Set(r2Files.map(file => `https://${BUCKET_NAME}.${endpointUrl}/${encodeURIComponent(file.Key)}`));
-        console.log(`🔎 В R2 найдено ${r2FileUrls.size} аудиофайлов.`);
-
-        // 2. Получаем все треки из MongoDB
-        const dbTracks = await collection.find({}, { projection: { url: 1 } }).toArray();
-        const dbTrackUrls = new Set(dbTracks.map(track => track.url));
-        console.log(`📚 В базе данных найдено ${dbTrackUrls.size} треков.`);
-
-        // 3. Находим треки для УДАЛЕНИЯ (есть в базе, но нет в R2)
-        const tracksToDelete = dbTracks.filter(track => !r2FileUrls.has(track.url));
-        if (tracksToDelete.length > 0) {
-            console.log(`\n🗑️ Найдено ${tracksToDelete.length} треков для удаления...`);
-            const idsToDelete = tracksToDelete.map(t => t._id);
-            await collection.deleteMany({ _id: { $in: idsToDelete } });
-            console.log(`✅ ${tracksToDelete.length} старых треков удалено из базы.`);
-        } else {
-            console.log('✨ Старых треков для удаления не найдено.');
-        }
-
-        // 4. Находим треки для ДОБАВЛЕНИЯ (есть в R2, но нет в базе)
-        const filesToAdd = r2Files.filter(file => {
-            const fileUrl = `https://${BUCKET_NAME}.${endpointUrl}/${encodeURIComponent(file.Key)}`;
-            return !dbTrackUrls.has(fileUrl);
-        });
-
-        if (filesToAdd.length === 0) {
-            console.log('✨ Новых треков для добавления не найдено. Синхронизация завершена.');
-            return;
-        }
-
-        console.log(`\n➕ Найдено ${filesToAdd.length} новых треков для добавления в базу...`);
-        const newTrackDocuments = [];
-
-        for (const [index, audioFile] of filesToAdd.entries()) {
-            console.log(`\n--- Обработка нового файла ${index + 1} из ${filesToAdd.length}: ${audioFile.Key} ---`);
+        for (const track of allTracks) {
+            // Извлекаем ключ файла из старого URL
+            const oldUrl = new URL(track.url);
+            const key = decodeURIComponent(oldUrl.pathname.substring(1)); // Убираем ведущий '/'
             
-            try {
-                const range = `bytes=0-${METADATA_CHUNK_SIZE_KB * 1024}`;
-                const getObjectCmd = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: audioFile.Key, Range: range });
-                const response = await s3Client.send(getObjectCmd);
-                const buffer = await streamToBuffer(response.Body);
+            // Собираем новый, правильный публичный URL
+            const newPublicUrl = `${PUBLIC_R2_URL_BASE}/${encodeURIComponent(key)}`;
 
-                const metadata = await mm.parseBuffer(buffer, { mimeType: 'audio/mpeg', size: audioFile.Size });
-                const { common, format } = metadata;
-                
-                const title = cleanName(common.title) || path.basename(audioFile.Key).replace(/\.[^/.]+$/, "");
-                const artist = cleanName(common.artist) || 'Unknown Artist';
-                const durationSeconds = Math.round(format.duration || 0);
-                const minutes = Math.floor(durationSeconds / 60);
-                const seconds = durationSeconds % 60;
-                const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                
-                const year = common.year || extractYear(audioFile.Key);
-                const genre = common.genre && common.genre.length > 0 ? common.genre[0] : 'Pop';
-
-                console.log(`      -> Исполнитель: ${artist}, Название: ${title}, Год: ${year || 'N/A'}`);
-                
-                newTrackDocuments.push({
-                    title, artist, duration, genre, year,
-                    coverUrl: null, // Новые треки всегда без обложки
-                    url: `https://${BUCKET_NAME}.${endpointUrl}/${encodeURIComponent(audioFile.Key)}`,
+            if (track.url !== newPublicUrl) {
+                bulkOps.push({
+                    updateOne: {
+                        filter: { _id: track._id },
+                        update: { $set: { url: newPublicUrl } }
+                    }
                 });
-
-            } catch (error) {
-                 console.error(`   ❗️ Ошибка при обработке файла ${audioFile.Key}: ${error.message}. Пропускаю...`);
             }
         }
-
-        // 5. Добавляем только новые документы в базу
-        if (newTrackDocuments.length > 0) {
-            console.log(`\n💾 Записываю ${newTrackDocuments.length} новых треков в MongoDB...`);
-            await collection.insertMany(newTrackDocuments);
-            console.log(`✅ Успешно добавлено ${newTrackDocuments.length} треков в базу.`);
+        
+        if (bulkOps.length > 0) {
+            console.log(`Found ${bulkOps.length} tracks with outdated URLs. Updating now...`);
+            await collection.bulkWrite(bulkOps);
+            console.log(`✅ Успешно обновлено ${bulkOps.length} URL в базе данных.`);
+        } else {
+            console.log('✅ Все URL в базе данных уже в актуальном состоянии.');
         }
 
     } catch (error) {
