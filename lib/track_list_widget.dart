@@ -1,3 +1,4 @@
+import 'package:eatune/helpers/genre_helper.dart'; // ИМПОРТ: Добавляем наш новый хелпер
 import 'package:eatune/managers/favorites_manager.dart';
 import 'package:eatune/managers/my_orders_manager.dart';
 import 'package:eatune/managers/track_cache_manager.dart';
@@ -12,14 +13,8 @@ import 'api.dart';
 class TrackListWidget extends StatefulWidget {
   final String mode;
   final String? filterValue;
-  final int limit;
 
-  const TrackListWidget({
-    super.key,
-    required this.mode,
-    this.filterValue,
-    this.limit = 0,
-  });
+  const TrackListWidget({super.key, required this.mode, this.filterValue});
 
   @override
   State<TrackListWidget> createState() => _TrackListWidgetState();
@@ -144,24 +139,16 @@ class _TrackListWidgetState extends State<TrackListWidget>
 
         List<Track> displayedTracks = List.from(snapshot.data!);
 
-        if (widget.mode == 'year' && widget.filterValue != null) {
-          final yearNum = int.tryParse(widget.filterValue!);
-          if (yearNum != null) {
-            displayedTracks = displayedTracks
-                .where((t) => t.year == yearNum)
-                .toList();
-          }
-        } else if (widget.mode == 'genre' && widget.filterValue != null) {
+        if (widget.mode == 'genre' && widget.filterValue != null) {
+          // ИЗМЕНЕНИЕ: Фильтруем по стандартизированному жанру
           displayedTracks = displayedTracks
               .where(
                 (t) =>
-                    t.genre?.toLowerCase() == widget.filterValue!.toLowerCase(),
+                    t.genre != null &&
+                    GenreHelper.getStandardizedGenre(t.genre!) ==
+                        widget.filterValue,
               )
               .toList();
-        }
-
-        if (widget.limit > 0 && displayedTracks.length > widget.limit) {
-          displayedTracks = displayedTracks.sublist(0, widget.limit);
         }
 
         return ListView.builder(

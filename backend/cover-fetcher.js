@@ -39,7 +39,7 @@ async function getSpotifyToken() {
     console.log('🔑 Получаю токен от Spotify...');
     const authString = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64');
     try {
-        // ИЗМЕНЕНИЕ: Используем официальный URL API
+        // ИСПРАВЛЕНИЕ: Используем официальный URL API Spotify для получения токена
         const response = await axios.post('https://accounts.spotify.com/api/token', 'grant_type=client_credentials', {
             headers: {
                 'Authorization': `Basic ${authString}`,
@@ -70,7 +70,7 @@ async function uploadCoverToR2(imageBuffer, trackId) {
         });
         await s3Client.send(command);
 
-        // ИЗМЕНЕНИЕ: Формируем правильную публичную ссылку для R2
+        // Формируем правильную публичную ссылку для R2
         return `${R2_PUBLIC_URL}/${s3Key}`;
     } catch (error) {
         console.error(`❗️ Ошибка загрузки обложки для трека ${trackId}:`, error);
@@ -80,7 +80,7 @@ async function uploadCoverToR2(imageBuffer, trackId) {
 
 async function findCoverOnSpotify(track, token) {
     const query = encodeURIComponent(`artist:"${track.artist}" track:"${track.title}"`);
-    // ИЗМЕНЕНИЕ: Используем официальный URL API
+    // ИСПРАВЛЕНИЕ: Используем официальный URL API Spotify для поиска и правильные шаблонные строки
     const url = `https://api.spotify.com/v1/search?q=${query}&type=track&limit=1`;
     try {
         const response = await axios.get(url, {

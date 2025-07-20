@@ -1,11 +1,10 @@
 // backend/scripts/smart-sync.js
+require('dotenv').config();
 
 const { S3Client, ListObjectsV2Command, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { MongoClient } = require('mongodb');
-const { Readable } = require('stream');
 const path = require('path');
 
-// ИЗМЕНЕНИЕ: Конфигурация для Cloudflare R2 с вашими данными
 const R2_CONFIG = {
     endpoint: 'https://e51a1f68ce64b0c69f6588f1e885c3ff.r2.cloudflarestorage.com',
     region: 'auto',
@@ -21,7 +20,7 @@ const COLLECTION_NAME = 'tracks';
 const METADATA_CHUNK_SIZE_KB = 256;
 
 if (!R2_CONFIG.credentials.accessKeyId || !R2_CONFIG.credentials.secretAccessKey || !process.env.MONGO_PASSWORD) {
-    console.error('❌ Ошибка: Ключи доступа R2 или пароль от MongoDB не предоставлены.');
+    console.error('❌ Ошибка: Ключи доступа R2 или пароль от MongoDB не предоставлены. Проверьте ваш .env файл.');
     process.exit(1);
 }
 
@@ -56,21 +55,49 @@ async function smartSync() {
         await mongoClient.connect();
         const db = mongoClient.db(DB_NAME);
         const collection = db.collection(COLLECTION_NAME);
+
+        // --- НОВАЯ ЛОГИКА СИНХРОНИЗАЦИИ ---
+
+        // 1. Получаем все файлы из R2
         const listCommand = new ListObjectsV2Command({ Bucket: BUCKET_NAME });
         const { Contents } = await s3Client.send(listCommand);
-        
-        if (!Contents) {
-            console.log("🎶 Файлов в бакете не найдено. Завершаю работу.");
+        const r2Files = Contents ? Contents.filter(file => /\.(mp3|wav|flac|m4a)$/i.test(file.Key) && file.Size > 0) : [];
+        const endpointUrl = R2_CONFIG.endpoint.replace('https://', '');
+        const r2FileUrls = new Set(r2Files.map(file => `https://${BUCKET_NAME}.${endpointUrl}/${encodeURIComponent(file.Key)}`));
+        console.log(`🔎 В R2 найдено ${r2FileUrls.size} аудиофайлов.`);
+
+        // 2. Получаем все треки из MongoDB
+        const dbTracks = await collection.find({}, { projection: { url: 1 } }).toArray();
+        const dbTrackUrls = new Set(dbTracks.map(track => track.url));
+        console.log(`📚 В базе данных найдено ${dbTrackUrls.size} треков.`);
+
+        // 3. Находим треки для УДАЛЕНИЯ (есть в базе, но нет в R2)
+        const tracksToDelete = dbTracks.filter(track => !r2FileUrls.has(track.url));
+        if (tracksToDelete.length > 0) {
+            console.log(`\n🗑️ Найдено ${tracksToDelete.length} треков для удаления...`);
+            const idsToDelete = tracksToDelete.map(t => t._id);
+            await collection.deleteMany({ _id: { $in: idsToDelete } });
+            console.log(`✅ ${tracksToDelete.length} старых треков удалено из базы.`);
+        } else {
+            console.log('✨ Старых треков для удаления не найдено.');
+        }
+
+        // 4. Находим треки для ДОБАВЛЕНИЯ (есть в R2, но нет в базе)
+        const filesToAdd = r2Files.filter(file => {
+            const fileUrl = `https://${BUCKET_NAME}.${endpointUrl}/${encodeURIComponent(file.Key)}`;
+            return !dbTrackUrls.has(fileUrl);
+        });
+
+        if (filesToAdd.length === 0) {
+            console.log('✨ Новых треков для добавления не найдено. Синхронизация завершена.');
             return;
         }
 
-        const audioFiles = Contents.filter(file => /\.(mp3|wav|flac|m4a)$/i.test(file.Key) && file.Size > 0);
-        console.log(`🎶 Найдено аудиофайлов для обработки: ${audioFiles.length}`);
+        console.log(`\n➕ Найдено ${filesToAdd.length} новых треков для добавления в базу...`);
+        const newTrackDocuments = [];
 
-        const trackDocuments = [];
-
-        for (const [index, audioFile] of audioFiles.entries()) {
-            console.log(`\n--- Обработка файла ${index + 1} из ${audioFiles.length}: ${audioFile.Key} ---`);
+        for (const [index, audioFile] of filesToAdd.entries()) {
+            console.log(`\n--- Обработка нового файла ${index + 1} из ${filesToAdd.length}: ${audioFile.Key} ---`);
             
             try {
                 const range = `bytes=0-${METADATA_CHUNK_SIZE_KB * 1024}`;
@@ -93,10 +120,9 @@ async function smartSync() {
 
                 console.log(`      -> Исполнитель: ${artist}, Название: ${title}, Год: ${year || 'N/A'}`);
                 
-                const endpointUrl = R2_CONFIG.endpoint.replace('https://', '');
-                trackDocuments.push({
+                newTrackDocuments.push({
                     title, artist, duration, genre, year,
-                    coverUrl: null,
+                    coverUrl: null, // Новые треки всегда без обложки
                     url: `https://${BUCKET_NAME}.${endpointUrl}/${encodeURIComponent(audioFile.Key)}`,
                 });
 
@@ -105,11 +131,11 @@ async function smartSync() {
             }
         }
 
-        if (trackDocuments.length > 0) {
-            console.log('\n💾 Очищаю коллекцию и записываю новые данные в MongoDB...');
-            await collection.deleteMany({});
-            await collection.insertMany(trackDocuments);
-            console.log(`✅ Успешно добавлено ${trackDocuments.length} треков в базу.`);
+        // 5. Добавляем только новые документы в базу
+        if (newTrackDocuments.length > 0) {
+            console.log(`\n💾 Записываю ${newTrackDocuments.length} новых треков в MongoDB...`);
+            await collection.insertMany(newTrackDocuments);
+            console.log(`✅ Успешно добавлено ${newTrackDocuments.length} треков в базу.`);
         }
 
     } catch (error) {

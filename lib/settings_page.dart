@@ -5,7 +5,6 @@ import 'package:eatune/widgets/pressable_animated_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'about_page.dart';
-import 'home_page.dart'; // Импортируем для доступа к NoGlowScrollBehavior
 import 'legal_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -37,6 +36,22 @@ class _SettingsPageState extends State<SettingsPage> {
         _deviceId = deviceId;
       });
     }
+  }
+
+  void _navigateToPage(Widget page) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => page,
+        transitionDuration: const Duration(milliseconds: 400),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            child: child,
+          );
+        },
+      ),
+    );
   }
 
   void _showSignOutDialog() {
@@ -147,84 +162,73 @@ class _SettingsPageState extends State<SettingsPage> {
       backgroundColor: const Color(0xFF010A15),
       appBar: AppBar(
         title: const Text('Настройки'),
-        backgroundColor: const Color(0xFF0D325F),
+        backgroundColor: const Color(0xFF010A15),
         elevation: 0,
       ),
-      body: ScrollConfiguration(
-        behavior: NoGlowScrollBehavior(),
-        child: ListView(
-          children: [
-            if (_activeVenueId != null) ...[
-              _buildSectionTitle('Текущая сессия'),
-              _buildListTile(
-                icon: Icons.store_mall_directory_outlined,
-                title: 'Заведение',
-                subtitle: _activeVenueId,
-              ),
-              _buildListTile(
-                icon: Icons.exit_to_app,
-                title: 'Выйти из заведения',
-                onTap: _showSignOutDialog,
-                isDestructive: true,
-              ),
-            ],
-            _buildSectionTitle('Приложение'),
+      body: ListView(
+        // ИЗМЕНЕНИЕ: Добавлен отступ сверху
+        padding: const EdgeInsets.only(top: 16.0),
+        children: [
+          if (_activeVenueId != null) ...[
+            _buildSectionTitle('Текущая сессия'),
             _buildListTile(
-              icon: Icons.star_outline,
-              title: 'Оценить приложение',
-              onTap: () {},
+              icon: Icons.store_mall_directory_outlined,
+              title: 'Заведение',
+              subtitle: _activeVenueId,
             ),
             _buildListTile(
-              icon: Icons.support_agent,
-              title: 'Связаться с поддержкой',
-              onTap: () {},
-            ),
-            _buildListTile(
-              icon: Icons.info_outline,
-              title: 'О приложении',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AboutPage()),
-              ),
-            ),
-            _buildSectionTitle('Правовая информация'),
-            _buildListTile(
-              icon: Icons.description_outlined,
-              title: 'Условия использования',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const LegalPage(type: LegalPageType.terms),
-                ),
-              ),
-            ),
-            _buildListTile(
-              icon: Icons.privacy_tip_outlined,
-              title: 'Политика конфиденциальности',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const LegalPage(type: LegalPageType.privacy),
-                ),
-              ),
-            ),
-            const SizedBox(height: 40),
-            _buildFooterInfo(
-              'Версия приложения: $_appVersion\nID устройства: $_deviceId',
+              icon: Icons.exit_to_app,
+              title: 'Выйти из заведения',
+              onTap: _showSignOutDialog,
+              isDestructive: true,
             ),
           ],
-        ),
+          const SizedBox(height: 24),
+          _buildSectionTitle('Приложение'),
+          _buildListTile(
+            icon: Icons.star_outline,
+            title: 'Оценить приложение',
+            onTap: () {},
+          ),
+          _buildListTile(
+            icon: Icons.support_agent,
+            title: 'Связаться с поддержкой',
+            onTap: () {},
+          ),
+          _buildListTile(
+            icon: Icons.info_outline,
+            title: 'О приложении',
+            onTap: () => _navigateToPage(const AboutPage()),
+          ),
+          const SizedBox(height: 24),
+          _buildSectionTitle('Правовая информация'),
+          _buildListTile(
+            icon: Icons.description_outlined,
+            title: 'Условия использования',
+            onTap: () =>
+                _navigateToPage(const LegalPage(type: LegalPageType.terms)),
+          ),
+          _buildListTile(
+            icon: Icons.privacy_tip_outlined,
+            title: 'Политика конфиденциальности',
+            onTap: () =>
+                _navigateToPage(const LegalPage(type: LegalPageType.privacy)),
+          ),
+          const SizedBox(height: 40),
+          _buildFooterInfo(
+            'Версия приложения: $_appVersion\nID устройства: $_deviceId',
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Text(
         title.toUpperCase(),
         style: const TextStyle(
-          // ИЗМЕНЕНИЕ: Убрал прозрачность
           color: Colors.white,
           fontWeight: FontWeight.w600,
           letterSpacing: 1.2,

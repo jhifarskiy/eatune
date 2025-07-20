@@ -3,7 +3,6 @@ import 'package:eatune/managers/queue_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'api.dart';
-import 'home_page.dart';
 
 class _NowPlayingCard extends StatefulWidget {
   final Track track;
@@ -147,7 +146,6 @@ class _NowPlayingCardState extends State<_NowPlayingCard> {
   }
 }
 
-// ИЗМЕНЕНИЕ: Превращаем в StatefulWidget
 class QueuePage extends StatefulWidget {
   const QueuePage({super.key});
 
@@ -155,16 +153,13 @@ class QueuePage extends StatefulWidget {
   State<QueuePage> createState() => _QueuePageState();
 }
 
-// ИЗМЕНЕНИЕ: Добавляем AutomaticKeepAliveClientMixin
 class _QueuePageState extends State<QueuePage>
     with AutomaticKeepAliveClientMixin {
-  // ИЗМЕНЕНИЕ: Указываем, что состояние этого виджета нужно сохранять
   @override
   bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
-    // ИЗМЕНЕНИЕ: Обязательный вызов для AutomaticKeepAliveClientMixin
     super.build(context);
     return Consumer<QueueManager>(
       builder: (context, queueManager, child) {
@@ -180,36 +175,34 @@ class _QueuePageState extends State<QueuePage>
           return _buildEmptyState(context);
         }
 
-        return ScrollConfiguration(
-          behavior: NoGlowScrollBehavior(),
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                height: 40.0,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [_buildSectionTitle('NOW PLAYING')],
-                ),
+        // ИЗМЕНЕНИЕ: Убрана обертка ScrollConfiguration, так как она теперь не нужна
+        return ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              height: 40.0,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [_buildSectionTitle('NOW PLAYING')],
               ),
+            ),
+            const SizedBox(height: 12),
+            _NowPlayingCard(track: nowPlaying),
+            if (upNext.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              _buildSectionTitle('UP NEXT'),
               const SizedBox(height: 12),
-              _NowPlayingCard(track: nowPlaying),
-              if (upNext.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                _buildSectionTitle('UP NEXT'),
-                const SizedBox(height: 12),
-                ...upNext
-                    .map(
-                      (track) =>
-                          _buildQueueItem(track, upNext.indexOf(track) + 1),
-                    )
-                    .toList(),
-              ],
-              const SizedBox(height: 85),
+              ...upNext
+                  .map(
+                    (track) =>
+                        _buildQueueItem(track, upNext.indexOf(track) + 1),
+                  )
+                  .toList(),
             ],
-          ),
+            const SizedBox(height: 85),
+          ],
         );
       },
     );
