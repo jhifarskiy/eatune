@@ -79,9 +79,14 @@ wss.on('connection', (ws, req) => {
         try {
             const data = JSON.parse(message);
             if (data.type === 'progress_update' && data.venueId === venueId) {
-                broadcastToVenue(venueId, {
-                    type: 'current_track_progress',
-                    currentTime: data.currentTime
+                // Рассылаем всем, КРОМЕ отправителя
+                venue.listeners.forEach(client => {
+                    if (client !== ws && client.readyState === client.OPEN) {
+                         client.send(JSON.stringify({
+                            type: 'current_track_progress',
+                            currentTime: data.currentTime
+                        }));
+                    }
                 });
             }
         } catch (e) {
@@ -133,12 +138,10 @@ function ensureSufficientBackgroundTracks(venueId) {
 // --- API РОУТЕР ---
 const apiRouter = express.Router();
 
-// GET /api/tracks - Получить треки (кэш)
 apiRouter.get('/tracks', async (req, res) => {
     res.json(backgroundPlaylist);
 });
 
-// GET /api/history/:venueId - Получить историю
 apiRouter.get('/history/:venueId', (req, res) => {
     const { venueId } = req.params;
     const venue = venueQueues[venueId];
@@ -148,8 +151,6 @@ apiRouter.get('/history/:venueId', (req, res) => {
     res.json(venue.history || []);
 });
 
-
-// POST /api/queue/add - Добавить трек в очередь (для пользователей)
 apiRouter.post('/queue/add', async (req, res) => {
     const { id: trackId, venueId, deviceId } = req.body;
     if (!trackId || !venueId || !deviceId) return res.status(400).json({ error: 'Track ID, Venue ID, and Device ID are required' });
@@ -160,28 +161,27 @@ apiRouter.post('/queue/add', async (req, res) => {
     
     const venue = venueQueues[venueId];
     const now = Date.now();
-    const venueUserCooldowns = userCooldowns[venueId] || {};
-    const lastAddTimestamp = venueUserCooldowns[deviceId];
 
-    // Проверка кулдауна пользователя
-    if (lastAddTimestamp) {
-        const cooldownEndTime = lastAddTimestamp + USER_COOLDOWN_MINUTES * 60 * 1000;
-        if (now < cooldownEndTime) {
-            const timeLeftMs = cooldownEndTime - now;
-            return res.status(429).json({
-                error: `Пользовательский кулдаун.`,
-                cooldownType: 'user',
-                timeLeftSeconds: Math.ceil(timeLeftMs / 1000),
-            });
+    if (deviceId !== 'admin') {
+        const venueUserCooldowns = userCooldowns[venueId] || {};
+        const lastAddTimestamp = venueUserCooldowns[deviceId];
+        if (lastAddTimestamp) {
+            const cooldownEndTime = lastAddTimestamp + USER_COOLDOWN_MINUTES * 60 * 1000;
+            if (now < cooldownEndTime) {
+                const timeLeftMs = cooldownEndTime - now;
+                return res.status(429).json({
+                    error: `Пользовательский кулдаун.`,
+                    cooldownType: 'user',
+                    timeLeftSeconds: Math.ceil(timeLeftMs / 1000),
+                });
+            }
         }
     }
 
-    // Проверка кулдауна трека
     if (venue.trackCooldowns.has(trackId) && now < venue.trackCooldowns.get(trackId)) {
         return res.status(429).json({ error: `Этот трек недавно играл.`, cooldownType: 'track' });
     }
 
-    // Проверка на дубликат в очереди
     if (venue.queue.some(track => track.id === trackId && !track.isBackgroundTrack)) {
         return res.status(409).json({ error: "Этот трек уже в очереди" });
     }
@@ -189,23 +189,23 @@ apiRouter.post('/queue/add', async (req, res) => {
     const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
     if (!selectedTrack) return res.status(404).json({ error: 'Track not found' });
 
-    // --- ОСНОВНАЯ ЛОГИКА ДОБАВЛЕНИЯ С ПРИОРИТЕТОМ ---
     const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: deviceId };
     const currentlyPlaying = venue.queue.shift();
-    venue.queue = venue.queue.filter(track => !track.isBackgroundTrack); // Удаляем фоновые
-    venue.queue.push(newTrack); // Добавляем заказ
+    venue.queue = venue.queue.filter(track => !track.isBackgroundTrack);
+    venue.queue.push(newTrack);
     if (currentlyPlaying) {
-        venue.queue.unshift(currentlyPlaying); // Возвращаем текущий трек
+        venue.queue.unshift(currentlyPlaying);
     }
     
-    if (!userCooldowns[venueId]) userCooldowns[venueId] = {};
-    userCooldowns[venueId][deviceId] = now;
+    if (deviceId !== 'admin') {
+      if (!userCooldowns[venueId]) userCooldowns[venueId] = {};
+      userCooldowns[venueId][deviceId] = now;
+    }
 
     broadcastQueueUpdate(venueId);
     res.status(201).json({ success: true, message: 'Трек добавлен в очередь!' });
 });
 
-// POST /api/queue/add-next - Добавить трек следующим (для админа)
 apiRouter.post('/queue/add-next', (req, res) => {
     const { trackId, venueId } = req.body;
     const venue = venueQueues[venueId];
@@ -214,21 +214,18 @@ apiRouter.post('/queue/add-next', (req, res) => {
     const trackToAdd = backgroundPlaylist.find(t => t.id === trackId);
     if (!trackToAdd) return res.status(404).json({ error: 'Track not found' });
     
-    // Вставляем трек на вторую позицию (после играющего)
     venue.queue.splice(1, 0, { ...trackToAdd, isBackgroundTrack: false, requestedBy: 'admin' });
 
     broadcastQueueUpdate(venueId);
     res.status(200).json({ success: true });
 });
 
-// POST /api/queue/remove - Удалить трек из очереди (для админа)
 apiRouter.post('/queue/remove', (req, res) => {
     const { trackId, venueId } = req.body;
     const venue = venueQueues[venueId];
     if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
     const trackIndex = venue.queue.findIndex(t => t.id === trackId);
-    // Не позволяем удалить текущий играющий трек
     if (trackIndex > 0) {
         venue.queue.splice(trackIndex, 1);
         broadcastQueueUpdate(venueId);
@@ -238,8 +235,6 @@ apiRouter.post('/queue/remove', (req, res) => {
     }
 });
 
-
-// POST /api/player/next - Следующий трек
 apiRouter.post('/player/next', (req, res) => {
     const { venueId } = req.body;
     const venue = venueQueues[venueId];
@@ -257,7 +252,6 @@ apiRouter.post('/player/next', (req, res) => {
     res.status(200).json({ success: true });
 });
 
-// POST /api/player/previous - Предыдущий трек
 apiRouter.post('/player/previous', (req, res) => {
     const { venueId } = req.body;
     const venue = venueQueues[venueId];
@@ -272,7 +266,6 @@ apiRouter.post('/player/previous', (req, res) => {
     res.status(200).json({ success: true });
 });
 
-// POST /api/player/play & /pause - Управление плеером
 apiRouter.post('/player/:action', (req, res) => {
     const { action } = req.params;
     const { venueId } = req.body;
@@ -282,7 +275,6 @@ apiRouter.post('/player/:action', (req, res) => {
     broadcastToVenue(venueId, { type: 'player_control', action });
     res.status(200).json({ success: true, action });
 });
-
 
 app.use('/api', apiRouter);
 
@@ -305,7 +297,8 @@ async function startServer() {
             genre: track.genre || "Pop",
             year: track.year || null,
             trackUrl: track.url,
-            coverUrl: track.coverUrl || null
+            coverUrl: track.coverUrl || null,
+            filePath: track.filePath || null, // <-- ДОБАВЛЕНО: Загружаем путь к файлу
         }));
         
         console.log(`Loaded ${backgroundPlaylist.length} tracks into memory.`);
