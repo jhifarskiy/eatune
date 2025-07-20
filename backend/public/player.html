@@ -229,6 +229,22 @@
         rightTabsContainer.addEventListener('click', handleTabClick);
         modalCancel.addEventListener('click', () => modal.classList.remove('visible'));
 
+        // --- Новый блок для отладки аудио ---
+        audio.addEventListener('error', (e) => {
+            console.error('Ошибка элемента <audio>:', e);
+            if (audio.error) {
+                console.log('Код ошибки:', audio.error.code);
+                console.log('Сообщение:', audio.error.message);
+            }
+        });
+        audio.addEventListener('stalled', () => {
+            console.warn('Событие Stalled: Загрузка медиа-данных приостановилась.');
+        });
+        audio.addEventListener('canplay', () => {
+            console.log('Событие Canplay: Браузер может начать воспроизведение.');
+        });
+        // --- Конец нового блока ---
+
         function onConnect() {
             const venueId = venueIdInput.value.trim();
             if (!venueId) return alert('Пожалуйста, введите ID заведения.');
@@ -348,7 +364,26 @@
         }
 
         function loadTrack(track) { updatePlayerUI(track); audio.src = track.trackUrl; if (isPlaying) playAudio(); else { playPauseIcon.innerHTML = ICONS.play; } }
-        function playAudio() { if (!currentTrack || !audio.src) return; audio.play().then(() => { isPlaying = true; playPauseIcon.innerHTML = ICONS.pause; }).catch(e => console.error("Play error:", e)); }
+        function playAudio() {
+            if (!currentTrack || !audio.src) {
+                console.error("Вызов playAudio, но трек не готов.");
+                return;
+            }
+            console.log(`Пытаюсь запустить воспроизведение: ${currentTrack.title}`);
+            const playPromise = audio.play();
+
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    console.log("Воспроизведение успешно началось.");
+                    isPlaying = true;
+                    playPauseIcon.innerHTML = ICONS.pause;
+                }).catch(error => {
+                    console.error("Ошибка воспроизведения:", error);
+                    isPlaying = false;
+                    playPauseIcon.innerHTML = ICONS.play;
+                });
+            }
+        }
         function pauseAudio() { audio.pause(); isPlaying = false; playPauseIcon.innerHTML = ICONS.play; }
         
         function renderTrackItem(track, type) {
@@ -429,14 +464,25 @@
         function resetPlayerUI() { titleEl.textContent = 'Ничего не играет'; artistEl.textContent = 'Очередь пуста'; coverArt.src = ''; audio.src = ''; progressBar.style.width = '0%'; currentTimeEl.textContent = '0:00'; totalTimeEl.textContent = '0:00'; isPlaying = false; playPauseIcon.innerHTML = ICONS.play; }
 
         async function sendApiRequest(endpoint, body) {
-            try { 
-                const response = await fetch(`/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, venueId: currentVenueId }) });
+            console.log(`Отправляю запрос на: /api/${endpoint}`, body);
+            try {
+                const response = await fetch(`/api/${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...body, venueId: currentVenueId })
+                });
+
+                console.log(`Получен ответ со статусом: ${response.status}`);
+
                 if (!response.ok) {
                     const errorData = await response.json();
+                    console.log('Сервер вернул ошибку:', errorData);
                     showModal(errorData.error, null, false);
+                } else {
+                     console.log('Запрос выполнен успешно.');
                 }
-            } catch (error) { 
-                console.error(`API request to ${endpoint} failed:`, error);
+            } catch (error) {
+                console.error(`API запрос на ${endpoint} провалился:`, error);
                 showModal('Ошибка сети. Не удалось выполнить действие.', null, false);
             }
         }
