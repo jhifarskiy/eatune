@@ -184,19 +184,16 @@ apiRouter.post('/queue/add', async (req, res) => {
     const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
     if (!selectedTrack) return res.status(404).json({ error: 'Track not found' });
 
-    // --- ИСПРАВЛЕННАЯ ЛОГИКА ДОБАВЛЕНИЯ С ПРИОРИТЕТОМ ---
+    // --- ВРЕМЕННЫЙ ОТКАТ ЛОГИКИ ДЛЯ ДИАГНОСТИКИ ---
     const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: deviceId };
-    
-    // Находим индекс первой фоновой песни после всех заказов
-    let insertIndex = venue.queue.findIndex((track, index) => index > 0 && track.isBackgroundTrack);
-    
-    // Если фоновых песен нет, просто добавляем в конец
-    if (insertIndex === -1) {
-        insertIndex = venue.queue.length;
+    const currentlyPlaying = venue.queue.shift();
+    // Возвращаем старую "агрессивную" логику, которая удаляла все фоновые треки
+    venue.queue = venue.queue.filter(track => !track.isBackgroundTrack);
+    venue.queue.push(newTrack);
+    if (currentlyPlaying) {
+        venue.queue.unshift(currentlyPlaying);
     }
-
-    // Вставляем новый трек на найденную позицию
-    venue.queue.splice(insertIndex, 0, newTrack);
+    // --- КОНЕЦ ВРЕМЕННОГО ОТКАТА ---
     
     if (deviceId !== 'admin') {
       if (!userCooldowns[venueId]) userCooldowns[venueId] = {};
