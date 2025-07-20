@@ -1,85 +1,215 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eatune Player</title>
+    <title>Eatune Player Control</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        /* ... (весь блок <style> остается без изменений) ... */
+        :root {
+            --background: #010A15;
+            --primary: #1CA4FF;
+            --surface: #0D325F;
+            --text-primary: #FFFFFF;
+            --text-secondary: #a0aec0;
+        }
         body {
             font-family: 'Montserrat', sans-serif;
-            background-color: #010A15;
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            background-color: var(--background);
+            color: var(--text-primary);
             margin: 0;
-            overflow: hidden;
-        }
-        .player-container {
-            /* ... */
-        }
-        /* ... (остальные стили без изменений) ... */
-
-        /* НОВЫЕ СТИЛИ для кнопки старта */
-        #start-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(1, 10, 21, 0.9);
+            padding: 20px;
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 1000;
-            cursor: pointer;
+            min-height: 100vh;
         }
-        #start-button {
-            padding: 20px 40px;
-            font-size: 24px;
-            font-weight: 600;
-            color: #010A15;
-            background-color: #1CA4FF;
+        .container {
+            width: 100%;
+            max-width: 800px;
+            display: none; /* Скрыто по умолчанию */
+        }
+        .login-container {
+            text-align: center;
+            padding: 40px;
+            background-color: var(--surface);
+            border-radius: 20px;
+        }
+        .login-container h1 {
+            margin-bottom: 20px;
+        }
+        #venueId {
+            padding: 15px;
+            width: 80%;
+            max-width: 300px;
+            border-radius: 25px;
+            border: 2px solid var(--primary);
+            background-color: var(--background);
+            color: var(--text-primary);
+            font-size: 16px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #connect-button {
+            padding: 15px 30px;
+            border-radius: 25px;
             border: none;
-            border-radius: 50px;
+            background-color: var(--primary);
+            color: var(--background);
+            font-weight: bold;
+            font-size: 16px;
             cursor: pointer;
             transition: transform 0.2s;
         }
-        #start-button:hover {
+        #connect-button:hover {
             transform: scale(1.05);
+        }
+        .player-section {
+            background-color: var(--surface);
+            padding: 20px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+        #now-playing-card .cover {
+            width: 80px;
+            height: 80px;
+            border-radius: 12px;
+            object-fit: cover;
+            margin-right: 20px;
+        }
+        #now-playing-card .info {
+            flex-grow: 1;
+        }
+        .progress-container {
+            height: 5px;
+            background-color: rgba(255,255,255,0.2);
+            border-radius: 2.5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: var(--primary);
+            transition: width 0.5s linear;
+        }
+        .time-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 15px;
+        }
+        .control-button {
+            background: none;
+            border: 2px solid var(--text-secondary);
+            color: var(--text-secondary);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            margin: 0 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            transition: all 0.2s;
+        }
+        .control-button:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        #play-pause-button {
+            width: 60px;
+            height: 60px;
+            border-color: var(--primary);
+            color: var(--primary);
+            font-size: 30px;
+        }
+        .queue-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .queue-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .queue-item:last-child {
+            border-bottom: none;
+        }
+        .queue-item .cover {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            margin-right: 15px;
+        }
+        .queue-item .info {
+            flex-grow: 1;
+        }
+        .queue-item .requested-by {
+            font-size: 12px;
+            color: var(--primary);
         }
     </style>
 </head>
 <body>
-    <div id="start-overlay">
-        <button id="start-button">Click to Start</button>
+
+    <div id="login-container" class="login-container">
+        <h1>Вход для персонала</h1>
+        <input type="text" id="venueId" placeholder="Введите ID заведения">
+        <br>
+        <button id="connect-button">Подключиться</button>
     </div>
 
-    <div class="player-container">
-        <div class="cover-container">
-            <img id="cover-art" src="placeholder.png" alt="Album Art">
+    <div id="player-container" class="container">
+        <div id="now-playing-card" class="player-section">
+            <div style="display: flex; align-items: center;">
+                <img id="cover-art" class="cover" src="placeholder.png" alt="Album Art">
+                <div class="info">
+                    <h2 id="title">Ничего не играет</h2>
+                    <p id="artist">Очередь пуста</p>
+                </div>
+            </div>
+            <div class="progress-container">
+                <div id="progress-bar"></div>
+            </div>
+            <div class="time-labels">
+                <span id="current-time">0:00</span>
+                <span id="total-time">0:00</span>
+            </div>
+             <div class="controls">
+                <button id="prev-button" class="control-button">⏮</button>
+                <button id="play-pause-button" class="control-button">▶</button>
+                <button id="next-button" class="control-button">⏭</button>
+            </div>
         </div>
-        <div class="track-info">
-            <h1 id="title">No track playing</h1>
-            <h2 id="artist">Queue is empty</h2>
-        </div>
-        <div class="progress-container">
-            <div id="progress-bar"></div>
-        </div>
-        <div class="time-container">
-            <span id="current-time">0:00</span>
-            <span id="total-time">0:00</span>
+
+        <div class="player-section">
+            <h3>Следующие в очереди</h3>
+            <ul id="queue-list" class="queue-list">
+                </ul>
         </div>
     </div>
+
     <audio id="audio-player"></audio>
 
-    <script src="/socket.io/socket.io.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const socket = io();
+            const loginContainer = document.getElementById('login-container');
+            const playerContainer = document.getElementById('player-container');
+            const venueIdInput = document.getElementById('venueId');
+            const connectButton = document.getElementById('connect-button');
+            
             const audio = document.getElementById('audio-player');
             const coverArt = document.getElementById('cover-art');
             const titleEl = document.getElementById('title');
@@ -87,88 +217,186 @@
             const progressBar = document.getElementById('progress-bar');
             const currentTimeEl = document.getElementById('current-time');
             const totalTimeEl = document.getElementById('total-time');
-            
-            // НОВАЯ ЛОГИКА: Обработка кнопки старта
-            const startOverlay = document.getElementById('start-overlay');
-            const startButton = document.getElementById('start-button');
-            let isAudioUnlocked = false;
+            const queueList = document.getElementById('queue-list');
 
-            startButton.addEventListener('click', () => {
-                if (!isAudioUnlocked) {
-                    audio.play().then(() => {
-                        audio.pause();
-                        isAudioUnlocked = true;
-                        console.log('Audio context unlocked.');
-                        startOverlay.style.display = 'none';
-                    }).catch(error => {
-                        console.error('Error unlocking audio:', error);
-                        // Можно показать сообщение об ошибке, если нужно
-                    });
+            const playPauseBtn = document.getElementById('play-pause-button');
+            const nextBtn = document.getElementById('next-button');
+            const prevBtn = document.getElementById('prev-button');
+
+            let ws;
+            let currentTrack = null;
+            let currentVenueId = '';
+            
+            // --- ЛОГИКА ПОДКЛЮЧЕНИЯ ---
+            connectButton.addEventListener('click', () => {
+                const venueId = venueIdInput.value.trim();
+                if (venueId) {
+                    currentVenueId = venueId;
+                    connectWebSocket(venueId);
+                } else {
+                    alert('Пожалуйста, введите ID заведения.');
                 }
             });
 
-            let currentTrack = null;
+            function connectWebSocket(venueId) {
+                // Закрываем старое соединение, если оно есть
+                if (ws) {
+                    ws.close();
+                }
 
-            socket.on('queueUpdate', (queue) => {
-                if (queue.length > 0) {
-                    const newTrack = queue[0];
-                    if (!currentTrack || currentTrack._id !== newTrack._id) {
-                        currentTrack = newTrack;
-                        updatePlayerUI(currentTrack);
-                        audio.src = currentTrack.url;
-                        // ИЗМЕНЕНИЕ: Воспроизведение только если аудио разблокировано
-                        if (isAudioUnlocked) {
-                            audio.play().catch(e => console.error("Playback error:", e));
-                        }
-                    }
-                } else {
+                const wsUrl = `wss://eatune-api.onrender.com?venueId=${venueId}`;
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    console.log(`WebSocket connected to venue: ${venueId}`);
+                    loginContainer.style.display = 'none';
+                    playerContainer.style.display = 'block';
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    handleMessage(data);
+                };
+
+                ws.onclose = () => {
+                    console.log('WebSocket disconnected.');
+                    loginContainer.style.display = 'flex';
+                    playerContainer.style.display = 'none';
                     currentTrack = null;
                     resetPlayerUI();
-                }
-            });
+                };
 
-            socket.on('playerState', (state) => {
-                if (state.isPlaying && audio.paused && isAudioUnlocked) {
-                    audio.play().catch(e => console.error("Playback error on state change:", e));
-                } else if (!state.isPlaying && !audio.paused) {
-                    audio.pause();
-                }
-            });
+                ws.onerror = (error) => {
+                    console.error('WebSocket Error:', error);
+                    alert('Не удалось подключиться к серверу. Проверьте ID заведения и ваше интернет-соединение.');
+                };
+            }
 
-            const updatePlayerUI = (track) => {
+            function handleMessage(data) {
+                if (data.type === 'queue_update') {
+                    const queue = data.queue || [];
+                    updateQueue(queue);
+                    const newTrack = queue.length > 0 ? queue[0] : null;
+                    
+                    if (newTrack && (!currentTrack || currentTrack.id !== newTrack.id)) {
+                        playTrack(newTrack);
+                    } else if (!newTrack) {
+                        resetPlayerUI();
+                    }
+                }
+            }
+
+            function playTrack(track) {
+                currentTrack = track;
+                updatePlayerUI(track);
+                audio.src = track.trackUrl;
+                audio.play().then(() => {
+                    playPauseBtn.textContent = '⏸';
+                }).catch(e => {
+                    console.error("Ошибка авто-воспроизведения, требуется взаимодействие с пользователем.", e);
+                    playPauseBtn.textContent = '▶';
+                });
+            }
+
+            function updateQueue(queue) {
+                queueList.innerHTML = ''; // Очищаем список
+                const upNext = queue.slice(1);
+
+                if (upNext.length === 0) {
+                     queueList.innerHTML = '<li>В очереди больше ничего нет.</li>';
+                     return;
+                }
+
+                upNext.forEach(track => {
+                    const item = document.createElement('li');
+                    item.className = 'queue-item';
+                    item.innerHTML = `
+                        <img class="cover" src="${track.coverUrl || 'placeholder.png'}" alt="cover">
+                        <div class="info">
+                            <strong>${track.title}</strong>
+                            <p>${track.artist}</p>
+                        </div>
+                        ${track.isBackgroundTrack ? '' : '<span class="requested-by">Заказ</span>'}
+                    `;
+                    queueList.appendChild(item);
+                });
+            }
+            
+            function updatePlayerUI(track) {
                 titleEl.textContent = track.title;
                 artistEl.textContent = track.artist;
                 coverArt.src = track.coverUrl || 'placeholder.png';
-                totalTimeEl.textContent = track.duration;
-            };
+            }
 
-            const resetPlayerUI = () => {
-                titleEl.textContent = 'No track playing';
-                artistEl.textContent = 'Queue is empty';
+            function resetPlayerUI() {
+                titleEl.textContent = 'Ничего не играет';
+                artistEl.textContent = 'Очередь пуста';
                 coverArt.src = 'placeholder.png';
-                totalTimeEl.textContent = '0:00';
-                currentTimeEl.textContent = '0:00';
-                progressBar.style.width = '0%';
                 audio.src = '';
-            };
+                progressBar.style.width = '0%';
+                currentTimeEl.textContent = '0:00';
+                totalTimeEl.textContent = '0:00';
+                queueList.innerHTML = '<li>Очередь пуста</li>';
+                playPauseBtn.textContent = '▶';
+            }
 
-            const formatTime = (seconds) => {
-                const minutes = Math.floor(seconds / 60);
-                const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
-                return `${minutes}:${secs}`;
-            };
+            // --- ОБРАБОТЧИКИ УПРАВЛЕНИЯ ---
+            playPauseBtn.addEventListener('click', () => {
+                if (audio.paused) {
+                    audio.play().then(() => playPauseBtn.textContent = '⏸');
+                } else {
+                    audio.pause();
+                    playPauseBtn.textContent = '▶';
+                }
+            });
 
+            nextBtn.addEventListener('click', () => {
+                fetch(`https://eatune-api.onrender.com/track/next`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ venueId: currentVenueId })
+                });
+            });
+
+            prevBtn.addEventListener('click', () => {
+                fetch(`https://eatune-api.onrender.com/track/previous`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ venueId: currentVenueId })
+                });
+            });
+
+            // --- ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ПЛЕЕРА ---
             audio.addEventListener('timeupdate', () => {
-                if (audio.duration) {
+                 if (audio.duration) {
                     const progress = (audio.currentTime / audio.duration) * 100;
                     progressBar.style.width = `${progress}%`;
                     currentTimeEl.textContent = formatTime(audio.currentTime);
+                    
+                    // Отправляем прогресс на сервер
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'progress_update',
+                            venueId: currentVenueId,
+                            currentTime: audio.currentTime
+                        }));
+                    }
                 }
             });
 
             audio.addEventListener('loadedmetadata', () => {
                 totalTimeEl.textContent = formatTime(audio.duration);
             });
+            
+            audio.addEventListener('ended', () => {
+                 nextBtn.click(); // Автоматически переключаем на следующий трек
+            });
+
+            function formatTime(seconds) {
+                const minutes = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+                return `${minutes}:${secs}`;
+            }
         });
     </script>
 </body>
