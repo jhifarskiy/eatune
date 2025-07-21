@@ -6,6 +6,7 @@ const path = require('path');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const { MongoClient } = require('mongodb');
+const axios = require('axios');
 
 // --- НАСТРОЙКИ ---
 const app = express();
@@ -133,6 +134,33 @@ function ensureSufficientBackgroundTracks(venueId) {
 // --- API РОУТЕР ---
 const apiRouter = express.Router();
 
+apiRouter.get('/stream/:trackId', async (req, res) => {
+    try {
+        const { trackId } = req.params;
+        const track = backgroundPlaylist.find(t => t.id === trackId);
+
+        if (!track || !track.trackUrl) {
+            return res.status(404).send('Track not found');
+        }
+
+        const response = await axios({
+            method: 'get',
+            url: track.trackUrl,
+            responseType: 'stream'
+        });
+
+        res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mpeg');
+        res.setHeader('Content-Length', response.headers['content-length']);
+        
+        response.data.pipe(res);
+
+    } catch (error) {
+        console.error('Streaming error:', error.message);
+        res.status(500).send('Error streaming track');
+    }
+});
+
+
 apiRouter.get('/tracks', async (req, res) => {
     res.json(backgroundPlaylist);
 });
@@ -184,18 +212,14 @@ apiRouter.post('/queue/add', async (req, res) => {
     const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
     if (!selectedTrack) return res.status(404).json({ error: 'Track not found' });
 
-    // --- ИСПРАВЛЕННАЯ ЛОГИКА ДОБАВЛЕНИЯ С ПРИОРИТЕТОМ ---
     const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: deviceId };
     
-    // Находим индекс первой фоновой песни после всех заказов
     let insertIndex = venue.queue.findIndex((track, index) => index > 0 && track.isBackgroundTrack);
     
-    // Если фоновых песен нет, просто добавляем в конец
     if (insertIndex === -1) {
         insertIndex = venue.queue.length;
     }
 
-    // Вставляем новый трек на найденную позицию
     venue.queue.splice(insertIndex, 0, newTrack);
     
     if (deviceId !== 'admin') {
