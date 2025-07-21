@@ -134,6 +134,7 @@ function ensureSufficientBackgroundTracks(venueId) {
 // --- API РОУТЕР ---
 const apiRouter = express.Router();
 
+// --- ИЗМЕНЕНИЕ: Полностью переработанный стриминг с поддержкой Range Requests ---
 apiRouter.get('/stream/:trackId', async (req, res) => {
     try {
         const { trackId } = req.params;
@@ -143,16 +144,48 @@ apiRouter.get('/stream/:trackId', async (req, res) => {
             return res.status(404).send('Track not found');
         }
 
-        const response = await axios({
-            method: 'get',
-            url: track.trackUrl,
-            responseType: 'stream'
-        });
+        // 1. Сначала делаем HEAD-запрос, чтобы узнать размер файла и тип
+        const headResponse = await axios.head(track.trackUrl);
+        const fileSize = headResponse.headers['content-length'];
+        const contentType = headResponse.headers['content-type'];
 
-        res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mpeg');
-        res.setHeader('Content-Length', response.headers['content-length']);
-        
-        response.data.pipe(res);
+        const range = req.headers.range;
+
+        // 2. Если есть заголовок Range - отдаем часть файла
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = (end - start) + 1;
+
+            const streamResponse = await axios({
+                method: 'get',
+                url: track.trackUrl,
+                responseType: 'stream',
+                headers: { 'Range': `bytes=${start}-${end}` }
+            });
+
+            res.writeHead(206, {
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunksize,
+                'Content-Type': contentType,
+            });
+            streamResponse.data.pipe(res);
+
+        } else { // 3. Если нет - отдаем файл целиком
+            const streamResponse = await axios({
+                method: 'get',
+                url: track.trackUrl,
+                responseType: 'stream'
+            });
+
+            res.writeHead(200, {
+                'Content-Length': fileSize,
+                'Content-Type': contentType,
+            });
+            streamResponse.data.pipe(res);
+        }
 
     } catch (error) {
         console.error('Streaming error:', error.message);
@@ -211,7 +244,7 @@ apiRouter.post('/queue/add', async (req, res) => {
 
     const selectedTrack = backgroundPlaylist.find(t => t.id === trackId);
     if (!selectedTrack) return res.status(404).json({ error: 'Track not found' });
-
+    
     const newTrack = { ...selectedTrack, isBackgroundTrack: false, requestedBy: deviceId };
     
     let insertIndex = venue.queue.findIndex((track, index) => index > 0 && track.isBackgroundTrack);
