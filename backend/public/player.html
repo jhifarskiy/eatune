@@ -290,15 +290,16 @@
             ws.onopen = () => { loginContainer.classList.add('hidden'); mainGrid.classList.remove('hidden'); fetchHistory(); setupTabUnderlines(); };
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                if (data.type === 'queue_update') handleQueueUpdate(data.queue || []);
-                else if (data.type === 'player_control') {
+                if (data.type === 'queue_update') {
+                    handleQueueUpdate(data.queue || []);
+                } else if (data.type === 'player_control') {
                     if (data.action === 'play') playAudio();
                     if (data.action === 'pause') pauseAudio();
-                } else if (data.type === 'current_track_progress') {
-                    if (audio.duration && !audio.seeking) {
-                        audio.currentTime = data.currentTime;
-                    }
                 }
+                // ИЗМЕНЕНИЕ: Логика для 'current_track_progress' удалена.
+                // Она вызывала "дергание" звука. Этот плеер является источником
+                // времени, он не должен получать его извне. Обновление UI
+                // происходит через событие 'timeupdate' самого аудиоплеера.
             };
             ws.onclose = () => { loginContainer.classList.remove('hidden'); mainGrid.classList.add('hidden'); currentTrack = null; resetPlayerUI(); stopProgressSender(); };
             ws.onerror = (error) => console.error('WebSocket Error:', error);
@@ -463,18 +464,18 @@
             }
         }
 
-        // function startProgressSender() {
-        //     if (progressUpdateInterval) clearInterval(progressUpdateInterval);
-        //     progressUpdateInterval = setInterval(() => {
-        //         if (ws && ws.readyState === WebSocket.OPEN && currentTrack && isPlaying) {
-        //             ws.send(JSON.stringify({
-        //                 type: 'progress_update',
-        //                 venueId: currentVenueId,
-        //                 currentTime: audio.currentTime
-        //             }));
-        //         }
-        //     }, 2500);
-        // }
+        function startProgressSender() {
+            if (progressUpdateInterval) clearInterval(progressUpdateInterval);
+            progressUpdateInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN && currentTrack && isPlaying) {
+                    ws.send(JSON.stringify({
+                        type: 'progress_update',
+                        venueId: currentVenueId,
+                        currentTime: audio.currentTime
+                    }));
+                }
+            }, 2500);
+        }
 
         function stopProgressSender() {
             if (progressUpdateInterval) clearInterval(progressUpdateInterval);
