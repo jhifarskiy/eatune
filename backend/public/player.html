@@ -463,18 +463,18 @@
             }
         }
 
-        function startProgressSender() {
-            if (progressUpdateInterval) clearInterval(progressUpdateInterval);
-            progressUpdateInterval = setInterval(() => {
-                if (ws && ws.readyState === WebSocket.OPEN && currentTrack && isPlaying) {
-                    ws.send(JSON.stringify({
-                        type: 'progress_update',
-                        venueId: currentVenueId,
-                        currentTime: audio.currentTime
-                    }));
-                }
-            }, 2500);
-        }
+        // function startProgressSender() {
+        //     if (progressUpdateInterval) clearInterval(progressUpdateInterval);
+        //     progressUpdateInterval = setInterval(() => {
+        //         if (ws && ws.readyState === WebSocket.OPEN && currentTrack && isPlaying) {
+        //             ws.send(JSON.stringify({
+        //                 type: 'progress_update',
+        //                 venueId: currentVenueId,
+        //                 currentTime: audio.currentTime
+        //             }));
+        //         }
+        //     }, 2500);
+        // }
 
         function stopProgressSender() {
             if (progressUpdateInterval) clearInterval(progressUpdateInterval);
